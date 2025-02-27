@@ -3,7 +3,6 @@ import { motion } from "framer-motion";
 import { CONTACT } from "../constants";
 import { FaEnvelope, FaPhone, FaMapMarkerAlt, FaCopy, FaCheck } from "react-icons/fa";
 
-// Animation variants
 const contactVariants = {
   hidden: { opacity: 0, y: 50 },
   visible: { 
@@ -33,35 +32,43 @@ const Contact = () => {
       >
         Get in Touch
       </motion.h2>
-      <div className="flex md:flex-wrap md:items-center md:justify-center md:gap-6 flex-row overflow-x-auto gap-4 snap-x snap-mandatory pb-4">
-        {/* Sleek Contact Info Cards */}
+      <div className="flex flex-col md:flex-row md:flex-wrap md:items-center md:justify-center gap-4 pb-4">
+        {/* Address Card */}
         <motion.div
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, amount: 0.3 }}
           variants={contactVariants}
-          className="w-full sm:w-72 bg-gradient-to-r from-cyan-600/70 via-purple-600/70 to-blue-700/70 rounded-full p-4 shadow-md border border-neutral-700 hover:border-cyan-300 transition-all duration-300 md:hover:scale-105 md:hover:shadow-xl animate-aurora shrink-0"
-          whileHover={{ scale: 1.05 }}
+          className="w-full md:w-72 bg-gradient-to-r from-cyan-600/70 via-purple-600/70 to-blue-700/70 rounded-lg md:rounded-full p-4 shadow-md border border-neutral-700 hover:border-cyan-300 transition-all duration-300 md:hover:scale-105"
         >
-          <div className="flex items-center gap-3">
-            <FaMapMarkerAlt className="text-cyan-300 text-xl flex-shrink-0" />
-            <p className="text-neutral-200 text-sm truncate">{CONTACT.address}</p>
+          <div className="flex items-center gap-3 justify-between min-w-0">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <FaMapMarkerAlt className="text-cyan-300 text-xl flex-shrink-0" />
+              <p className="text-neutral-200 text-sm truncate flex-1">
+                {CONTACT.address}
+              </p>
+            </div>
           </div>
         </motion.div>
+
+        {/* Phone Card */}
         <motion.div
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, amount: 0.3 }}
           variants={contactVariants}
-          className="w-full sm:w-72 bg-gradient-to-r from-cyan-600/70 via-purple-600/70 to-blue-700/70 rounded-full p-4 shadow-md border border-neutral-700 hover:border-cyan-300 transition-all duration-300 md:hover:scale-105 md:hover:shadow-xl animate-aurora shrink-0"
-          whileHover={{ scale: 1.05 }}
+          className="w-full md:w-72 bg-gradient-to-r from-cyan-600/70 via-purple-600/70 to-blue-700/70 rounded-lg md:rounded-full p-4 shadow-md border border-neutral-700 hover:border-cyan-300 transition-all duration-300 md:hover:scale-105"
         >
-          <div className="flex items-center gap-3">
-            <FaPhone className="text-cyan-300 text-xl flex-shrink-0" />
-            <p className="text-neutral-200 text-sm truncate">{CONTACT.phoneNo}</p>
+          <div className="flex items-center gap-3 justify-between min-w-0">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <FaPhone className="text-cyan-300 text-xl flex-shrink-0" />
+              <p className="text-neutral-200 text-sm truncate flex-1">
+                {CONTACT.phoneNo}
+              </p>
+            </div>
             <motion.button
               onClick={() => handleCopy(CONTACT.phoneNo, "phone")}
-              className="ml-2 text-cyan-400 hover:text-cyan-200 flex-shrink-0"
+              className="text-cyan-400 hover:text-cyan-200 flex-shrink-0"
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
             >
@@ -69,25 +76,28 @@ const Contact = () => {
             </motion.button>
           </div>
         </motion.div>
+
+        {/* Email Card */}
         <motion.div
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, amount: 0.3 }}
           variants={contactVariants}
-          className="w-full sm:w-72 bg-gradient-to-r from-cyan-600/70 via-purple-600/70 to-blue-700/70 rounded-full p-4 shadow-md border border-neutral-700 hover:border-cyan-300 transition-all duration-300 md:hover:scale-105 md:hover:shadow-xl animate-aurora shrink-0"
-          whileHover={{ scale: 1.05 }}
+          className="w-full md:w-72 bg-gradient-to-r from-cyan-600/70 via-purple-600/70 to-blue-700/70 rounded-lg md:rounded-full p-4 shadow-md border border-neutral-700 hover:border-cyan-300 transition-all duration-300 md:hover:scale-105"
         >
-          <div className="flex items-center gap-3">
-            <FaEnvelope className="text-cyan-300 text-xl flex-shrink-0" />
-            <a
-              href={`mailto:${CONTACT.email}`}
-              className="text-neutral-200 text-sm truncate border-b border-transparent hover:border-cyan-300"
-            >
-              {CONTACT.email}
-            </a>
+          <div className="flex items-center gap-3 justify-between min-w-0">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <FaEnvelope className="text-cyan-300 text-xl flex-shrink-0" />
+              <a
+                href={`mailto:${CONTACT.email}`}
+                className="text-neutral-200 text-sm border-b border-transparent hover:border-cyan-300 truncate flex-1"
+              >
+                {CONTACT.email}
+              </a>
+            </div>
             <motion.button
               onClick={() => handleCopy(CONTACT.email, "email")}
-              className="ml-2 text-cyan-400 hover:text-cyan-200 flex-shrink-0"
+              className="text-cyan-400 hover:text-cyan-200 flex-shrink-0"
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
             >
