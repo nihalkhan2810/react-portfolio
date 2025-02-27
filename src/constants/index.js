@@ -1,6 +1,13 @@
-import project1 from "../assets/projects/project-1.jpg";
-import project2 from "../assets/projects/project-2.jpg";
-import project3 from "../assets/projects/project-3.jpg";
+import ASL1 from "../assets/projects/ASL1.png";
+import ASL2 from "../assets/projects/ASL2.png";
+import ASL3 from "../assets/projects/ASL3.png";
+import FP1 from "../assets/projects/FP1.png";
+import FP2 from "../assets/projects/FP2.png";
+import FP3 from "../assets/projects/FP3.png";
+import FP4 from "../assets/projects/FP4.png";
+import BT1 from "../assets/projects/BT1.png";
+import BT2 from "../assets/projects/BT2.png";
+import BT3 from "../assets/projects/BT3.png";
 
 export const HERO_CONTENT = `I am a passionate AI Engineer and Researcher with 3+ years of experience in building scalable deep learning systems and practical AI solutions. My expertise spans computer vision (CNNs, OpenCV), machine learning (PyTorch, TensorFlow), and cloud deployment (AWS, Kubernetes). I specialize in creating end-to-end solutions, from model development to production-ready pipelines, with a strong foundation in full-stack development using React and Flask. My goal is to leverage cutting-edge AI technologies to solve real-world problems while delivering robust, efficient, and user-friendly solutions.`;
 
@@ -9,6 +16,21 @@ export const ABOUT_TEXT = `As an AI Engineer and Researcher, I bring a unique bl
 I specialize in computer vision, deep learning, and natural language processing (NLP), with hands-on experience in tools like PyTorch, TensorFlow, and AWS. My work with Large Language Models (LLMs) includes fine-tuning and deploying models using Hugging Face and LangChain, enabling applications like intelligent chatbots, document analysis, and automated metadata tagging. Beyond AI, I’m also proficient in full-stack development, having built this very website using React. I thrive in collaborative environments where I can contribute to innovative solutions while continuously learning and adapting to new technologies.
 
 When I’m not coding, you’ll find me exploring the latest advancements in AI, contributing to open-source projects, or staying active through sports and fitness. My goal is to keep pushing the boundaries of what’s possible with technology while delivering impactful, user-friendly solutions.`;
+
+export const EDUCATION = [
+  {
+    degree: "Masters of Engineering in Electrical and Computer Engineering",
+    university: "University of Windsor",
+    duration: "Sept 2023 - Dec 2024",
+    location: "Windsor, Canada"
+  },
+  {
+    degree: "Bachelor of Technology in Information Technology",
+    university: "Sathyabama Institute of Science and Technology",
+    duration: "June 2019 - May 2023",
+    location: "Chennai, India"
+  }
+];
 
 export const EXPERIENCES = [
   {
@@ -28,12 +50,8 @@ export const EXPERIENCES = [
 export const PROJECTS = [
   {
     title: "ASL Hand Gesture Analysis Using CNN",
-    image: "https://picsum.photos/160/160?random=1", // Thumbnail
-    images: [
-      "https://picsum.photos/128/128?random=1",
-      "https://picsum.photos/128/128?random=2",
-      "https://picsum.photos/128/128?random=3"
-    ], // Gallery images
+    image: ASL1, // Thumbnail
+    images: [ASL1, ASL2, ASL3], // Gallery images
     summary: "Trained a CNN to recognize ASL hand gestures with high accuracy on Raspberry Pi hardware.",
     details: [
       "Trained a TensorFlow-based CNN on 5000+ ASL images, achieving 98% test accuracy with <5 ms inference time on Raspberry Pi hardware.",
@@ -43,12 +61,8 @@ export const PROJECTS = [
   },
   {
     title: "Fish-Species Identification Using Deep Learning",
-    image: "https://picsum.photos/160/160?random=2", // Thumbnail
-    images: [
-      "https://picsum.photos/128/128?random=4",
-      "https://picsum.photos/128/128?random=5",
-      "https://picsum.photos/128/128?random=6"
-    ], // Gallery images
+    image: FP1, // Thumbnail
+    images: [FP1, FP2, FP3, FP4], // Gallery images
     summary: "Designed a deep learning pipeline to classify fish species with high accuracy.",
     details: [
       "Designed a PySpark pipeline on AWS EMR to classify 20+ fish species, achieving 90% accuracy with a VGG-16 model trained on 1000+ images.",
@@ -58,12 +72,8 @@ export const PROJECTS = [
   },
   {
     title: "Identification of Brain Tumor Using CNN",
-    image: "https://picsum.photos/160/160?random=3", // Thumbnail
-    images: [
-      "https://picsum.photos/128/128?random=7",
-      "https://picsum.photos/128/128?random=8",
-      "https://picsum.photos/128/128?random=9"
-    ], // Gallery images
+    image: BT1, // Thumbnail
+    images: [BT1, BT2, BT3], // Gallery images
     summary: "Built a CNN pipeline to classify MRI scans for brain tumor detection.",
     details: [
       "Designed a CNN-based pipeline using TensorFlow/Keras to classify MRI scans as malignant or non-malignant, achieving 92% accuracy with a custom ResNet-50 model trained on 5,000+ annotated scans.",
@@ -75,7 +85,7 @@ export const PROJECTS = [
 ];
 
 export const CONTACT = {
-  address: "767 Fifth Avenue, New York, NY 10153 ",
-  phoneNo: "+12 4555 666 00 ",
-  email: "me@example.com",
+  address: "431 Curry Ave, Windsor, Ontario, Canada",
+  phoneNo: "+1 (437) 556 9983 ",
+  email: "mohammednihal281001@gmail.com",
 };
