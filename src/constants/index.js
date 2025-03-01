@@ -34,7 +34,7 @@ export const EDUCATION = [
 
 export const EXPERIENCES = [
   {
-    year: "Dec 2022 - Jan 2023",
+    year: "Dec 2021 - Jan 2023",
     role: "Research Assistant",
     company: "Sathyabama Institute",
     summary: "Developed a CNN-based pipeline for larvae identification and optimized real-time edge deployments.",
