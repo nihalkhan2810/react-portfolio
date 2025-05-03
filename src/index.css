@@ -1,39 +1,30 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+/* Add or verify this CSS in your index.css */
 
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
 @import "tailwindcss";
 
-
-:root { 
+/* Ensure Inter font is applied */
+:root {
   font-family: "Inter", sans-serif;
 }
 
+/* Keep existing animations */
 @keyframes gradient {
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
 }
-
 @keyframes spin {
   to {
     transform: rotate(360deg);
   }
 }
-
 @keyframes gradient-border {
-  0%, 100% {
-    border-color: #0ea5e9;
-  }
-  25% {
-    border-color: #6366f1;
-  }
-  50% {
-    border-color: #0ea5e9;
-  }
-  75% {
-    border-color: #6366f1;
-  }
+  0%, 100% { border-color: #0ea5e9; }
+  25% { border-color: #6366f1; }
+  50% { border-color: #0ea5e9; }
+  75% { border-color: #6366f1; }
 }
-
 @keyframes shake {
   0% { transform: translateX(0); }
   25% { transform: translateX(2px); }
@@ -41,21 +32,118 @@
   75% { transform: translateX(2px); }
   100% { transform: translateX(0); }
 }
-
 .animate-shake {
   animation: shake 0.4s ease-in-out;
 }
-
-
-
-
 @keyframes aurora {
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
 }
-
 .animate-aurora {
   animation: aurora 4s ease-in-out infinite;
   background-size: 200% 200%;
+}
+
+
+/* --- Custom Scrollbar Styling --- */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #0891b2 #1f2937; /* thumb (cyan-600) and track (gray-800/900) color */
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #1f2937;
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #0891b2;
+  border-radius: 4px;
+  border: 2px solid #1f2937;
+}
+
+/* --- Small Dot Flashing Animation for Typing Indicator --- */
+/* This is a common CSS pattern for typing dots */
+.dot-flashing-small {
+  position: relative;
+  width: 6px; /* Smaller dot */
+  height: 6px; /* Smaller dot */
+  border-radius: 3px; /* Smaller dot */
+  background-color: #60a5fa; /* Blue color */
+  color: #60a5fa; /* Ensure color is set */
+  animation: dotFlashingSmall 1s infinite linear alternate;
+  display: inline-block; /* Needed to size correctly */
+  margin-right: 4px; /* Space after dots */
+  margin-bottom: 1px; /* Align with text baseline */
+}
+
+.dot-flashing-small::before,
+.dot-flashing-small::after {
+  content: "";
+  display: inline-block; /* Needed to size correctly */
+  position: absolute;
+  top: 0;
+  width: 6px; /* Smaller dot */
+  height: 6px; /* Smaller dot */
+  border-radius: 3px; /* Smaller dot */
+  background-color: #60a5fa; /* Blue color */
+  color: #60a5fa; /* Ensure color is set */
+}
+
+.dot-flashing-small::before {
+  left: -8px; /* Position before */
+  animation: dotFlashingSmall 1s infinite linear alternate;
+  animation-delay: 0.3s;
+}
+
+.dot-flashing-small::after {
+  left: 8px; /* Position after */
+  animation: dotFlashingSmall 1s infinite linear alternate;
+  animation-delay: 0.6s;
+}
+
+@keyframes dotFlashingSmall {
+  0% { opacity: 0.2; }
+  50%, 100% { opacity: 1; }
+}
+
+/* Adjust message padding if needed to fit dots nicely */
+.p-3 {
+    padding: 0.75rem; /* Default Tailwind p-3 */
+}
+
+/* Add this to your index.css */
+
+/* Ensure existing vertical scrollbar is fine */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #0891b2 #1f2937; /* thumb (cyan-600) and track (gray-800/900) color */
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px; /* width of the vertical scrollbar */
+  height: 8px; /* height of the horizontal scrollbar */
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #1f2937; /* color of the track */
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #0891b2; /* color of the scroll thumb */
+  border-radius: 4px;
+  border: 2px solid #1f2937;
+}
+
+/* --- Styling for Horizontal Scrollbar (Optional, reuse if needed) --- */
+/* If you use custom-scrollbar-horizontal class */
+.custom-scrollbar-horizontal {
+   /* Can use the same scrollbar styles as above if they are generic */
+   /* Or define specific styles if needed */
 }
