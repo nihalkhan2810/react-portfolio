@@ -1,46 +1,91 @@
 // src/data/skills.js
 export const SKILLS = [
-    {
-      category: "Back-end Development",
-      skills: [
-        { name: "Python", level: 95 },
-        { name: "C/C++", level: 85 },
-        { name: "Java", level: 80 },
-      ],
-    },
-    {
-      category: "Data Pipelines & AI",
-      skills: [
-        { name: "PyTorch", level: 90 },
-        { name: "TensorFlow", level: 90 },
-        { name: "Pandas", level: 85 },
-        { name: "NumPy", level: 85 },
-        { name: "Scikit-learn", level: 80 },
-        { name: "MLflow", level: 75 },
-        { name: "OpenCV", level: 80 },
-        { name: "BERT", level: 75 },
-        { name: "LangChain", level: 70 },
-      ],
-    },
-    {
-      category: "Front-end Development",
-      skills: [
-        { name: "ReactJs", level: 85 },
-        { name: "Dart", level: 70 },
-        { name: "Flutter", level: 70 },
-        { name: "HTML", level: 90 },
-        { name: "CSS", level: 90 },
-      ],
-    },
-    {
-      category: "DevOps & Tools",
-      skills: [
-        { name: "Docker", level: 80 },
-        { name: "Kubernetes", level: 75 },
-        { name: "Git", level: 90 },
-        { name: "AWS", level: 85 },
-        { name: "Snowflake", level: 75 },
-        { name: "PostgreSQL", level: 80 },
-      ],
-    },
-  ];
+  {
+    category: "Back-end Development",
+    skills: [
+      { name: "Python", level: 95 },
+      { name: "C/C++", level: 85 },
+      { name: "Java", level: 80 },
+      { name: "Node.js", level: 80 },
+      { name: "REST APIs", level: 85 },
+    ],
+  },
+  {
+    category: "Data Pipelines & AI",
+    skills: [
+      { name: "PyTorch", level: 90 },
+      { name: "TensorFlow", level: 90 },
+      { name: "Pandas", level: 85 },
+      { name: "NumPy", level: 85 },
+      { name: "Scikit-learn", level: 80 },
+      { name: "MLflow", level: 75 },
+      { name: "OpenCV", level: 80 },
+      { name: "BERT", level: 75 },
+      { name: "LangChain", level: 85 },
+      { name: "OpenAI APIs", level: 90 },
+      { name: "RAG Pipelines", level: 85 },
+      { name: "Prompt Engineering", level: 85 },
+      { name: "Vector Search", level: 80 },
+      { name: "SHAP", level: 75 },
+      { name: "N8N", level: 70 },
+      { name: "Hugging Face", level: 80 },
+    ],
+  },
+  {
+    category: "Front-end Development",
+    skills: [
+      { name: "ReactJs", level: 85 },
+      { name: "Next.js", level: 90 },
+      { name: "TypeScript", level: 85 },
+      { name: "JavaScript", level: 90 },
+      { name: "Tailwind CSS", level: 85 },
+      { name: "Framer Motion", level: 75 },
+      { name: "Dart", level: 70 },
+      { name: "Flutter", level: 70 },
+      { name: "HTML", level: 90 },
+      { name: "CSS", level: 90 },
+    ],
+  },
+  {
+    category: "DevOps & Cloud Tools",
+    skills: [
+      { name: "Docker", level: 80 },
+      { name: "Kubernetes", level: 75 },
+      { name: "Git", level: 90 },
+      { name: "AWS", level: 85 },
+      { name: "AWS Lambda", level: 80 },
+      { name: "API Gateway", level: 80 },
+      { name: "DynamoDB", level: 80 },
+      { name: "GCP", level: 75 },
+      { name: "CI/CD", level: 80 },
+      { name: "WebSockets", level: 75 },
+      { name: "Snowflake", level: 75 },
+      { name: "PostgreSQL", level: 80 },
+    ],
+  },
+  {
+    category: "Multimedia & Video Processing",
+    skills: [
+      { name: "FFmpeg", level: 80 },
+      { name: "H.264", level: 75 },
+      { name: "HEVC", level: 75 },
+      { name: "AV1", level: 70 },
+    ],
+  },
+  {
+    category: "Security & Governance",
+    skills: [
+      { name: "Threat Modeling", level: 70 },
+      { name: "API Access Control", level: 80 },
+      { name: "Secure AI Workflow Design", level: 80 },
+      { name: "AI Governance Principles", level: 70 },
+    ],
+  },
+  {
+    category: "Data & Automation",
+    skills: [
+      { name: "Lightweight ETL", level: 80 },
+      { name: "Workflow Automation", level: 80 },
+    ],
+  },
+];
