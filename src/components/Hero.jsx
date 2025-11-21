@@ -1,7 +1,7 @@
 // Hero.jsx
 import React from "react";
 import { HERO_CONTENT } from "../constants";
-import Nihalprofile from "../assets/Nihalprofile.jpeg";
+import Nihalprofile from "../assets/Nihalprofile.jpg";
 import { motion } from "framer-motion";
 // Import the robot icon and a standard right arrow icon
 import { FaRobot, FaArrowRight } from 'react-icons/fa'; // <--- Changed FaArrowDownRight to FaArrowRight
