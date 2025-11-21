@@ -9,6 +9,7 @@ import Experience from './components/Experience';
 import Projects from './components/Projects';
 import Contact from './components/Contact';
 import Skills from './components/Skills';
+import Resume from './components/Resume';
 // Import the ChatbotComponent
 import ChatbotComponent from './components/ChatbotComponent'; // Adjust path if needed
 
