@@ -54,6 +54,7 @@ const ChatbotComponent = ({ showBot, setShowBot }) => {
     // State to control the visibility of the entire suggestion *bar* initially
     const [showInitialSuggestions, setShowInitialSuggestions] = useState(true); // True initially
     const sessionIdRef = useRef(getOrCreateSessionId());
+    const [showIntroSpotlight, setShowIntroSpotlight] = useState(false);
 
     // --- State for per-message typing indicator ---
     // This is handled by the isTyping flag on the message object
@@ -92,6 +93,28 @@ const ChatbotComponent = ({ showBot, setShowBot }) => {
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
+
+    // Spotlight intro on load/reload to guide users to the chatbot.
+    useEffect(() => {
+        const showTimer = setTimeout(() => {
+            setShowIntroSpotlight(true);
+        }, 900);
+
+        const hideTimer = setTimeout(() => {
+            setShowIntroSpotlight(false);
+        }, 8500);
+
+        return () => {
+            clearTimeout(showTimer);
+            clearTimeout(hideTimer);
+        };
+    }, []);
+
+    useEffect(() => {
+        if (showBot) {
+            setShowIntroSpotlight(false);
+        }
+    }, [showBot]);
 
     // Modified handleSend to accept an optional query string (used by suggestions)
     const handleSend = async (query = input) => { // Default query to current input
@@ -312,6 +335,42 @@ const ChatbotComponent = ({ showBot, setShowBot }) => {
 
 
     return (
+        <>
+        <AnimatePresence>
+            {showIntroSpotlight && !showBot && (
+                <motion.div
+                    className="fixed inset-0 z-40"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.35 }}
+                    onClick={() => setShowIntroSpotlight(false)}
+                    aria-hidden="true"
+                >
+                    <div
+                        className="absolute inset-0"
+                        style={{
+                            background:
+                                'radial-gradient(circle at calc(100% - 40px) calc(100% - 40px), rgba(15, 23, 42, 0.05) 0, rgba(15, 23, 42, 0.05) 46px, rgba(2, 6, 23, 0.72) 64px)',
+                        }}
+                    />
+                    <motion.div
+                        className="absolute bottom-[74px] right-[14px] h-14 w-14 rounded-full border border-cyan-300/60"
+                        animate={{ scale: [1, 1.42, 1], opacity: [0.8, 0.2, 0.8] }}
+                        transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+                    />
+                    <motion.div
+                        className="absolute bottom-24 right-24 max-w-[230px] rounded-xl border border-cyan-400/40 bg-slate-900/85 px-4 py-3 text-xs uppercase tracking-[0.18em] text-cyan-200 shadow-lg backdrop-blur"
+                        initial={{ y: 14, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        transition={{ duration: 0.45, delay: 0.15 }}
+                    >
+                        Ask my AI assistant
+                    </motion.div>
+                </motion.div>
+            )}
+        </AnimatePresence>
+
         <div className="fixed bottom-4 right-4 z-50">
             {/* Chatbot toggle button with enhanced animation when hidden */}
             <motion.button
@@ -455,6 +514,7 @@ const ChatbotComponent = ({ showBot, setShowBot }) => {
             )}
             </AnimatePresence>
         </div>
+        </>
     );
 };
 

@@ -3,10 +3,6 @@ import React from "react";
 import { HERO_CONTENT } from "../constants";
 import Nihalprofile from "../assets/Nihalprofile.jpg";
 import { motion } from "framer-motion";
-// Import the robot icon and a standard right arrow icon
-import { FaRobot, FaArrowRight } from 'react-icons/fa'; // <--- Changed FaArrowDownRight to FaArrowRight
-// Import the TypingTextIndicator component
-import TypingTextIndicator from './TypingTextIndicator';
 
 
 // Animation variants (Keep existing variants)
@@ -30,17 +26,7 @@ const photoVariants = {
   hover: { scale: 1.05, transition: { duration: 0.3 } },
 };
 
-const indicatorVariants = {
-  hidden: { y: 20, opacity: 0 },
-  visible: {
-    y: 0,
-    opacity: 1,
-    transition: { duration: 0.6, delay: 1.5 },
-  },
-};
-
-// Receive setShowBot as a prop
-const Hero = ({ setShowBot }) => {
+const Hero = () => {
   return (
     <div className="pb-4 lg:mb-35">
       <div className="flex flex-wrap items-center">
@@ -76,49 +62,6 @@ const Hero = ({ setShowBot }) => {
             >
               {HERO_CONTENT}
             </motion.p>
-
-            {/* --- Chatbot Existence Indicator (Clickable with Animated Arrow) --- */}
-            <motion.div
-                variants={indicatorVariants}
-                initial="hidden"
-                animate="visible"
-                className="my-4 cursor-pointer group flex items-center"
-                onClick={() => setShowBot(true)}
-                aria-label="Open AI Chat Assistant"
-                role="button"
-            >
-                {/* Container for Icon and Typing Text */}
-                <p className="text-xl font-light tracking-tight text-cyan-400 lg:text-2xl flex items-center group-hover:text-cyan-300 transition-colors duration-200">
-                    <FaRobot className="mr-2 text-cyan-500 group-hover:text-cyan-400 transition-colors duration-200" size={24} />
-                    <TypingTextIndicator
-                        text="Check out my AI Assistant! Ask anything about me"
-                        delay={1500}
-                        speed={40}
-                    />
-                </p>
-
-                {/* --- Animated Arrow --- */}
-                {/* Using FaArrowRight and animating its position and rotation */}
-                <motion.div
-                   className="ml-2 text-cyan-400 group-hover:text-cyan-300 transition-colors duration-200"
-                   // Animate position and rotation to point towards bottom-right
-                   animate={{ x: [0, 5, 0], y: [0, 5, 0], rotate: [0, 45, 0] }} // Move down-right and rotate 45 degrees
-                   transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut", delay: 2.5 }}
-                >
-                    <FaArrowRight size={24} /> {/* Using the standard right arrow */}
-                </motion.div>
-                {/* --- End Animated Arrow --- */}
-
-                 {/* Underline effect on hover */}
-                 <motion.div
-                    initial={{ width: 0 }}
-                    whileHover={{ width: '100%' }}
-                    transition={{ duration: 0.3 }}
-                    className="h-0.5 bg-cyan-400 mt-1 absolute bottom-0 left-0 right-0"
-                 />
-            </motion.div>
-            {/* --- End Chatbot Existence Indicator --- */}
-
           </div>
         </div>
         {/* Image Section */}
