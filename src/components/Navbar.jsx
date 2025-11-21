@@ -90,6 +90,17 @@ const Navbar = () => {
           Experience
         </Link>
         <Link
+          to="resume"
+          spy={true}
+          smooth={true}
+          offset={-50}
+          duration={500}
+          className="text-white hover:text-gray-300 transition-colors cursor-pointer"
+        >
+          Resume
+        </Link>
+
+        <Link
           to="projects"
           spy={true}
           smooth={true}
@@ -97,6 +108,7 @@ const Navbar = () => {
           duration={500}
           className="text-white hover:text-gray-300 transition-colors cursor-pointer"
         >
+        
           Projects
         </Link>
         <Link
