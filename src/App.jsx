@@ -9,11 +9,7 @@ import Experience from './components/Experience';
 import Projects from './components/Projects';
 import Contact from './components/Contact';
 import Skills from './components/Skills';
-<<<<<<< HEAD
 import Resume from './components/ResumeSection';
-=======
-import Resume from './components/Resume';
->>>>>>> 210f894 (fixing error)
 // Import the ChatbotComponent
 import ChatbotComponent from './components/ChatbotComponent'; // Adjust path if needed
 
