@@ -32,10 +32,36 @@ export const EDUCATION = [
 
 export const EXPERIENCES = [
   {
+    year: "May 2025 - Present",
+    role: "AI & Full Stack Engineer",
+    company: "NexApproach",
+    summary:
+      "Building an AI-powered, high-performance web platform on AWS, focusing on low-latency architectures, secure APIs, and reliable GPT-4 integrations.",
+    description: [
+      "Engineered a high-performance Next.js platform with LangChain, supporting 500+ simultaneous users through real-time WebSockets and tuned SSR for fast, consistent response times.",
+      "Architected a resilient AWS setup using Lambda (Node 18.x), API Gateway with custom auth, and DynamoDB, achieving sub-100ms end-to-end latency and around 99.5% service availability.",
+      "Delivered secure, scalable REST APIs with JWT-based authentication and 100 req/min rate limiting, while integrating GPT-4 into cost-optimized, fault-tolerant workflows for production use."
+    ],
+    technologies: [
+      "Next.js",
+      "React",
+      "TypeScript",
+      "LangChain",
+      "Node.js",
+      "AWS Lambda",
+      "API Gateway",
+      "DynamoDB",
+      "WebSockets",
+      "GPT-4",
+      "JWT"
+    ]
+  },
+  {
     year: "Dec 2021 - Jan 2023",
     role: "Research Assistant",
     company: "Sathyabama Institute",
-    summary: "Developed a CNN-based pipeline for larvae identification and optimized real-time edge deployments.",
+    summary:
+      "Developed a CNN-based pipeline for larvae identification and optimized real-time edge deployments.",
     description: [
       "Built a CNN-based pipeline in PyTorch for larvae identification, achieving an F1-score of 0.92 by fine-tuning pre-trained ResNet-34 models and integrating LLM-generated explanations for misclassification analysis.",
       "Automated image preprocessing workflows using OpenCV and Kubernetes, reducing inference latency from 200 ms to 140 ms for real-time edge deployments.",
