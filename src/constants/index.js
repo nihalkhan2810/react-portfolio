@@ -57,7 +57,7 @@ export const EXPERIENCES = [
     ]
   },
   {
-    year: "Dec 2021 - Jan 2023",
+    year: "April 2020 - May 2023",
     role: "Research Assistant",
     company: "Sathyabama Institute",
     summary:
