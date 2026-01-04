@@ -1,6 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
-import resumePdf from "../data/Resume_3.pdf";
+import resumePdf from "../data/Resume_4.pdf";
 
 const containerVariants = {
   hidden: { opacity: 0, y: 40 },
