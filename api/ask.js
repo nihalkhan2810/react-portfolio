@@ -349,7 +349,7 @@ async function streamGemini(prompt, res) {
         line = line.trim();
         if (!line) continue;
         if (line.startsWith("data:")) line = line.slice(5).trim();
-        if (line === "[DONE]") return true;
+        if (line === "[DONE]") return wrote;
 
         try {
           const payload = JSON.parse(line);
