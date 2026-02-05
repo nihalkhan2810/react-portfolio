@@ -8,8 +8,8 @@ const EMBEDDING_MODEL =
   process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-small";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3-flash-preview";
 
-const OPENAI_TIMEOUT = Number(process.env.OPENAI_TIMEOUT_SEC || 6);
-const GEMINI_TIMEOUT = Number(process.env.GEMINI_TIMEOUT_SEC || 8);
+const OPENAI_TIMEOUT = Number(process.env.OPENAI_TIMEOUT_SEC || 8);
+const GEMINI_TIMEOUT = Number(process.env.GEMINI_TIMEOUT_SEC || 20);
 const MAX_CONTEXT_CHARS = Number(process.env.MAX_CONTEXT_CHARS || 6000);
 
 const SUMMARY_TRIGGERS = [
@@ -32,6 +32,46 @@ const TOPIC_TRIGGERS = [
 ];
 
 const SENSITIVE_TRIGGERS = ["visa", "sponsorship", "citizenship", "immigration"];
+const STOPWORDS = new Set([
+  "a",
+  "about",
+  "an",
+  "and",
+  "are",
+  "as",
+  "at",
+  "be",
+  "but",
+  "by",
+  "for",
+  "from",
+  "has",
+  "have",
+  "i",
+  "in",
+  "is",
+  "it",
+  "me",
+  "my",
+  "of",
+  "on",
+  "or",
+  "that",
+  "the",
+  "this",
+  "to",
+  "was",
+  "were",
+  "what",
+  "when",
+  "where",
+  "who",
+  "why",
+  "you",
+  "your",
+  "yourself",
+  "tell",
+]);
 
 let VECTOR_CACHE = null;
 
@@ -58,7 +98,7 @@ function tokenize(text) {
   return normalizeWhitespace(text.toLowerCase())
     .replace(/[^a-z0-9\s]/g, " ")
     .split(" ")
-    .filter(Boolean);
+    .filter((token) => token && !STOPWORDS.has(token));
 }
 
 function hasEvidence(query, contexts) {
@@ -262,33 +302,34 @@ async function streamGemini(prompt, res) {
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT * 1000);
-  const resp = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        system_instruction: {
-          parts: [
-            {
-              text: [
-                "You are the portfolio owner speaking in first person.",
-                "Be warm, recruiter-friendly, and concise.",
-                "No markdown, no bullet points, no headings.",
-                "If the answer isn't in the provided context, say you don't have that information.",
-                "Paraphrase the context; do not copy sentences verbatim.",
-              ].join(" "),
-            },
-          ],
-        },
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.4, maxOutputTokens: 512 },
-      }),
-      signal: controller.signal,
-    }
-  );
-
+  let wrote = false;
   try {
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          system_instruction: {
+            parts: [
+              {
+                text: [
+                  "You are the portfolio owner speaking in first person.",
+                  "Be warm, recruiter-friendly, and concise.",
+                  "No markdown, no bullet points, no headings.",
+                  "If the answer isn't in the provided context, say you don't have that information.",
+                  "Paraphrase the context; do not copy sentences verbatim.",
+                ].join(" "),
+              },
+            ],
+          },
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.4, maxOutputTokens: 512 },
+        }),
+        signal: controller.signal,
+      }
+    );
+
     if (!resp.ok || !resp.body) {
       throw new Error(`Gemini stream failed (${resp.status})`);
     }
@@ -296,7 +337,6 @@ async function streamGemini(prompt, res) {
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
-    let wrote = false;
 
     while (true) {
       const { value, done } = await reader.read();
@@ -330,8 +370,27 @@ async function streamGemini(prompt, res) {
       }
     }
     return wrote;
+  } catch (err) {
+    if (err?.name === "AbortError") {
+      return wrote;
+    }
+    throw err;
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+async function readJsonBody(req) {
+  if (req.body && typeof req.body === "object") return req.body;
+  let raw = "";
+  for await (const chunk of req) {
+    raw += chunk;
+  }
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return {};
   }
 }
 
@@ -351,7 +410,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { query } = req.body || {};
+    const { query } = await readJsonBody(req);
     const question = (query || "").trim();
     if (!question) {
       res.status(400).json({ error: "Missing query" });
@@ -361,18 +420,19 @@ export default async function handler(req, res) {
     res.setHeader("Content-Type", "text/plain; charset=utf-8");
     res.setHeader("Cache-Control", "no-cache, no-transform");
     res.setHeader("X-Gemini-Model", GEMINI_MODEL);
+    res.flushHeaders?.();
 
     const contexts = await retrieveContext(question);
     const summaryIntent = isSummaryIntent(question);
     const topic = inferTopic(question);
 
     if (isSensitiveQuery(question) && !hasEvidence(question, contexts)) {
-      res.end("I don’t have that information in my portfolio data.");
+      res.end("I don't have that information in my portfolio data.");
       return;
     }
 
     if (!contexts.length && (summaryIntent || topic)) {
-      res.end("I don’t have that information in my portfolio data.");
+      res.end("I don't have that information in my portfolio data.");
       return;
     }
 
@@ -380,13 +440,24 @@ export default async function handler(req, res) {
 
     const streamed = await streamGemini(prompt, res);
     if (!streamed) {
-      const answer = await callGemini(prompt);
-      res.end(answer);
+      try {
+        const answer = await callGemini(prompt);
+        res.end(answer);
+      } catch {
+        const fallback = normalizeWhitespace(
+          contexts.map((c) => c.content).join(" ")
+        );
+        res.end(fallback || "I don't have enough information to answer that.");
+      }
       return;
     }
 
     res.end();
   } catch (err) {
+    if (res.headersSent) {
+      res.end();
+      return;
+    }
     res.status(500).json({ error: err.message || "Server error" });
   }
 }
