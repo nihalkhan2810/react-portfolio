@@ -29,6 +29,43 @@ SUMMARY_TRIGGERS = (
     "tell me about yourself",
     "background",
 )
+STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "but",
+    "by",
+    "for",
+    "from",
+    "has",
+    "have",
+    "i",
+    "in",
+    "is",
+    "it",
+    "me",
+    "my",
+    "of",
+    "on",
+    "or",
+    "that",
+    "the",
+    "this",
+    "to",
+    "was",
+    "were",
+    "what",
+    "when",
+    "where",
+    "who",
+    "why",
+    "you",
+    "your",
+}
 
 
 @dataclass
@@ -80,6 +117,21 @@ def _infer_topic(query: str) -> Optional[str]:
     if "research" in q or "paper" in q:
         return "research"
     return None
+
+
+def _tokenize(text: str) -> List[str]:
+    cleaned = re.sub(r"[^a-z0-9\s]", " ", text.lower())
+    tokens = [t for t in cleaned.split() if t and t not in STOPWORDS]
+    return tokens
+
+
+def _has_evidence(query: str, contexts: List[Dict]) -> bool:
+    query_tokens = set(_tokenize(query))
+    if not query_tokens:
+        return True
+    joined = " ".join(c["content"] for c in contexts)
+    context_tokens = set(_tokenize(joined))
+    return len(query_tokens & context_tokens) > 0
 
 
 def _load_vectors() -> None:
@@ -215,12 +267,8 @@ def fallback_context(query: str, top_k: int = 3) -> List[Dict]:
 def build_prompt(query: str, contexts: List[Dict]) -> str:
     parts: List[str] = []
     for item in contexts:
-        meta = item["metadata"]
-        label = f"{meta.get('topic', 'kb')}/{meta.get('source_path', '')}"
-        if meta.get("section_title"):
-            label = f"{label} :: {meta.get('section_title')}"
         snippet = _normalize_whitespace(item["content"])
-        parts.append(f"[{label}] {snippet}")
+        parts.append(snippet)
 
     context_block = "\n".join(parts)
     if len(context_block) > MAX_CONTEXT_CHARS:
@@ -228,7 +276,12 @@ def build_prompt(query: str, contexts: List[Dict]) -> str:
     return (
         "Question: " + query + "\n\n"
         "Context:\n" + context_block + "\n\n"
-        "Answer clearly and concisely, grounded only in the context."
+        "Instructions:\n"
+        "- Answer in first person as if you are the portfolio owner.\n"
+        "- Be conversational and concise (2-4 sentences).\n"
+        "- Do not use markdown, bullet lists, or headings.\n"
+        "- If the answer is not in the context, say you don't have that information.\n"
+        "- Do not mention sources, file names, or the word 'context'."
     )
 
 
@@ -243,10 +296,10 @@ def call_gemini(prompt: str) -> str:
             "parts": [
                 {
                     "text": (
-                        "You are Nihal Khan's portfolio assistant. "
-                        "Answer only from the provided context. "
-                        "If the answer is not in context, say you don't have that information. "
-                        "Be recruiter-friendly and concise."
+                        "You are the portfolio owner speaking in first person. "
+                        "Be warm, recruiter-friendly, and concise. "
+                        "No markdown, no bullet points, no headings. "
+                        "If the answer isn't in the provided context, say you don't have that information."
                     )
                 }
             ]
@@ -280,16 +333,24 @@ class handler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({"error": "Missing query"}).encode("utf-8"))
                 return
 
+            visa_query = "visa" in query.lower()
             try:
                 contexts, _sources = retrieve_context(query)
             except requests.Timeout:
                 contexts = fallback_context(query)
-            prompt = build_prompt(query, contexts)
-            try:
-                answer = call_gemini(prompt)
-            except requests.Timeout:
-                snippets = [c["content"] for c in contexts]
-                answer = " ".join(snippets).strip() or "I don't have enough information to answer that."
+            if visa_query and not _has_evidence(query, contexts):
+                answer = "I don’t have that information in my portfolio data."
+            else:
+                prompt = build_prompt(query, contexts)
+                try:
+                    answer = call_gemini(prompt)
+                except requests.Timeout:
+                    if not _has_evidence(query, contexts):
+                        answer = "I don’t have that information in my portfolio data."
+                    else:
+                        snippets = [c["content"] for c in contexts]
+                        merged = _normalize_whitespace(" ".join(snippets))
+                        answer = merged[:600] if merged else "I don’t have enough information to answer that."
 
             self.send_response(200)
             self.send_header("Content-Type", "text/plain; charset=utf-8")
