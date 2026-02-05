@@ -18,6 +18,7 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
 OPENAI_TIMEOUT = float(os.getenv("OPENAI_TIMEOUT_SEC", "6"))
 GEMINI_TIMEOUT = float(os.getenv("GEMINI_TIMEOUT_SEC", "8"))
 MAX_CONTEXT_CHARS = int(os.getenv("MAX_CONTEXT_CHARS", "6000"))
+STREAM_GEMINI = os.getenv("GEMINI_STREAM", "true").lower() in {"1", "true", "yes"}
 
 LAYER_RANK = {"summary": 0, "window": 1, "section": 2, "file": 3, "fallback": 4}
 SUMMARY_TRIGGERS = (
@@ -117,6 +118,31 @@ def _infer_topic(query: str) -> Optional[str]:
     if "research" in q or "paper" in q:
         return "research"
     return None
+
+
+def _tokenize(text: str) -> List[str]:
+    cleaned = re.sub(r"[^a-z0-9\s]", " ", text.lower())
+    return [t for t in cleaned.split() if t and t not in STOPWORDS]
+
+
+def _has_evidence(query: str, contexts: List[Dict]) -> bool:
+    query_tokens = set(_tokenize(query))
+    if not query_tokens:
+        return True
+    joined = " ".join(c["content"] for c in contexts)
+    context_tokens = set(_tokenize(joined))
+    return len(query_tokens & context_tokens) > 0
+
+
+def _truncate_at_sentence(text: str, max_chars: int) -> str:
+    if len(text) <= max_chars:
+        return text
+    truncated = text[:max_chars]
+    for sep in [". ", "! ", "? "]:
+        idx = truncated.rfind(sep)
+        if idx != -1 and idx > max_chars * 0.5:
+            return truncated[: idx + 1].strip()
+    return truncated.strip()
 
 
 def _tokenize(text: str) -> List[str]:
@@ -319,6 +345,53 @@ def call_gemini(prompt: str) -> str:
     return "".join(part.get("text", "") for part in parts).strip()
 
 
+def call_gemini_stream(prompt: str):
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY is not set.")
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:streamGenerateContent?key={api_key}"
+    payload = {
+        "system_instruction": {
+            "parts": [
+                {
+                    "text": (
+                        "You are the portfolio owner speaking in first person. "
+                        "Be warm, recruiter-friendly, and concise. "
+                        "No markdown, no bullet points, no headings. "
+                        "If the answer isn't in the provided context, say you don't have that information."
+                    )
+                }
+            ]
+        },
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.3, "maxOutputTokens": 512},
+    }
+    response = requests.post(url, json=payload, timeout=GEMINI_TIMEOUT, stream=True)
+    response.raise_for_status()
+
+    for line in response.iter_lines(decode_unicode=True):
+        if not line:
+            continue
+        if line.startswith("data:"):
+            data = line.split(":", 1)[1].strip()
+        else:
+            data = line.strip()
+        if data == "[DONE]":
+            break
+        try:
+            payload = json.loads(data)
+        except json.JSONDecodeError:
+            continue
+        candidates = payload.get("candidates") or []
+        for candidate in candidates:
+            parts = candidate.get("content", {}).get("parts", [])
+            for part in parts:
+                text = part.get("text")
+                if text:
+                    yield text
+
+
 class handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         try:
@@ -334,27 +407,52 @@ class handler(BaseHTTPRequestHandler):
                 return
 
             visa_query = "visa" in query.lower()
+            topic = _infer_topic(query)
             try:
                 contexts, _sources = retrieve_context(query)
             except requests.Timeout:
                 contexts = fallback_context(query)
-            if visa_query and not _has_evidence(query, contexts):
+
+            if (visa_query or not topic) and not _has_evidence(query, contexts):
                 answer = "I don’t have that information in my portfolio data."
-            else:
-                prompt = build_prompt(query, contexts)
-                try:
-                    answer = call_gemini(prompt)
-                except requests.Timeout:
-                    if not _has_evidence(query, contexts):
-                        answer = "I don’t have that information in my portfolio data."
-                    else:
-                        snippets = [c["content"] for c in contexts]
-                        merged = _normalize_whitespace(" ".join(snippets))
-                        answer = merged[:600] if merged else "I don’t have enough information to answer that."
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("X-Gemini-Model", GEMINI_MODEL)
+                self.end_headers()
+                self.wfile.write(answer.encode("utf-8"))
+                return
+
+            prompt = build_prompt(query, contexts)
 
             self.send_response(200)
             self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("X-Gemini-Model", GEMINI_MODEL)
             self.end_headers()
+
+            if STREAM_GEMINI:
+                emitted = False
+                try:
+                    for chunk in call_gemini_stream(prompt):
+                        emitted = True
+                        self.wfile.write(chunk.encode("utf-8"))
+                        self.wfile.flush()
+                    if not emitted:
+                        answer = call_gemini(prompt)
+                        self.wfile.write(answer.encode("utf-8"))
+                except requests.Timeout:
+                    snippets = [c["content"] for c in contexts]
+                    merged = _normalize_whitespace(" ".join(snippets))
+                    answer = _truncate_at_sentence(merged, 600) if merged else "I don’t have enough information to answer that."
+                    self.wfile.write(answer.encode("utf-8"))
+                return
+
+            try:
+                answer = call_gemini(prompt)
+            except requests.Timeout:
+                snippets = [c["content"] for c in contexts]
+                merged = _normalize_whitespace(" ".join(snippets))
+                answer = _truncate_at_sentence(merged, 600) if merged else "I don’t have enough information to answer that."
             self.wfile.write(answer.encode("utf-8"))
         except Exception as exc:
             self.send_response(500)
