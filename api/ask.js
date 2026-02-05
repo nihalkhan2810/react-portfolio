@@ -1,12 +1,23 @@
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 
-const ROOT_DIR = process.cwd();
-const VECTOR_PATH = path.join(ROOT_DIR, "db", "kb_vectors.json");
+// ES Module __dirname equivalent
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Try multiple possible paths for the vector file (for different environments)
+const POSSIBLE_VECTOR_PATHS = [
+  path.join(process.cwd(), "db", "kb_vectors.json"),
+  path.join(process.cwd(), "public", "db", "kb_vectors.json"),
+  path.join(__dirname, "..", "..", "db", "kb_vectors.json"), // API route relative
+  path.join(__dirname, "..", "..", "..", "db", "kb_vectors.json"), // One more level up
+  "/tmp/kb_vectors.json", // Vercel tmp directory
+];
 
 const EMBEDDING_MODEL =
   process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-small";
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-flash";
 
 const OPENAI_TIMEOUT = Number(process.env.OPENAI_TIMEOUT_SEC || 15);
 const GEMINI_TIMEOUT = Number(process.env.GEMINI_TIMEOUT_SEC || 30);
@@ -24,17 +35,17 @@ const SUMMARY_TRIGGERS = [
 ];
 
 const TOPIC_TRIGGERS = [
-  ["projects", ["project", "projects", "portfolio"]],
-  ["experience", ["experience", "work", "job", "career", "professional"]],
-  ["skills", ["skills", "stack", "tools", "tech", "technologies", "expertise"]],
-  ["about", ["education", "degree", "university", "school", "background"]],
-  ["research", ["research", "paper", "publication", "study"]],
+  ["projects", ["project", "projects", "portfolio", "work", "built", "created"]],
+  ["experience", ["experience", "work", "job", "career", "professional", "industry", "years", "company"]],
+  ["skills", ["skills", "skill", "stack", "tools", "tech", "technologies", "expertise", "proficient", "language", "framework"]],
+  ["about", ["education", "degree", "university", "school", "background", "studied", "learned"]],
+  ["research", ["research", "paper", "publication", "study", "published"]],
 ];
 
 const SENSITIVE_TRIGGERS = ["visa", "sponsorship", "citizenship", "immigration"];
 const STOPWORDS = new Set([
   "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "has", "have",
-  "in", "is", "it", "of", "on", "or", "that", "the", "to", "was", "were",
+  "in", "is", "it", "of", "on", "or", "that", "the", "to", "was", "were", "i", "me", "my",
 ]);
 
 // Simple in-memory cache for embeddings
@@ -43,6 +54,7 @@ const CACHE_MAX_SIZE = 1000;
 
 let VECTOR_CACHE = null;
 let VECTOR_CACHE_MTIME = null;
+let LAST_ERROR = null;
 
 function normalizeWhitespace(text) {
   return text.replace(/\s+/g, " ").trim();
@@ -83,8 +95,8 @@ function hasEvidence(query, contexts) {
     if (contextTokens.has(token)) matches++;
   }
   
-  // Require at least 30% of query tokens to match, or at least 1 if query is short
-  const threshold = Math.min(1, Math.floor(queryTokens.size * 0.3));
+  // More lenient: require only 1 match or 20% of tokens
+  const threshold = Math.max(1, Math.floor(queryTokens.size * 0.2));
   return matches >= threshold;
 }
 
@@ -116,18 +128,42 @@ function cosineSimilarity(vecA, normA, vecB, normB) {
   return dot / (normA * normB);
 }
 
+function findVectorPath() {
+  for (const tryPath of POSSIBLE_VECTOR_PATHS) {
+    if (fs.existsSync(tryPath)) {
+      return tryPath;
+    }
+  }
+  return null;
+}
+
 function loadVectors() {
   try {
-    const stats = fs.statSync(VECTOR_PATH);
+    const vectorPath = findVectorPath();
+    
+    if (!vectorPath) {
+      console.error("Vector file not found in any location:", POSSIBLE_VECTOR_PATHS);
+      LAST_ERROR = "Vector database not found";
+      return [];
+    }
+    
+    const stats = fs.statSync(vectorPath);
     const mtime = stats.mtimeMs;
     
     if (VECTOR_CACHE && VECTOR_CACHE_MTIME === mtime) {
       return VECTOR_CACHE;
     }
     
-    const raw = fs.readFileSync(VECTOR_PATH, "utf-8");
+    console.log("Loading vectors from:", vectorPath);
+    const raw = fs.readFileSync(vectorPath, "utf-8");
     const data = JSON.parse(raw);
-    const vectors = (data.vectors || []).map((item) => {
+    
+    if (!data.vectors || !Array.isArray(data.vectors)) {
+      console.error("Invalid vector file format");
+      return [];
+    }
+    
+    const vectors = data.vectors.map((item, idx) => {
       const embedding = item.embedding || [];
       let norm = 0;
       for (const val of embedding) norm += val * val;
@@ -137,14 +173,18 @@ function loadVectors() {
         embedding,
         norm,
         metadata: item.metadata || {},
+        id: idx,
       };
-    });
+    }).filter(v => v.content.length > 10); // Filter out empty/short entries
     
+    console.log(`Loaded ${vectors.length} vectors`);
     VECTOR_CACHE = vectors;
     VECTOR_CACHE_MTIME = mtime;
+    LAST_ERROR = null;
     return vectors;
   } catch (err) {
     console.error("Failed to load vectors:", err.message);
+    LAST_ERROR = err.message;
     return [];
   }
 }
@@ -196,11 +236,14 @@ async function openaiEmbed(query) {
 }
 
 function buildPrompt(query, contexts) {
+  if (!contexts.length) {
+    return `Question: ${query}\n\nYou are the portfolio owner. You don't have specific information about this in your portfolio data. Politely say you don't have those details available but would be happy to discuss in person. Keep it brief (1-2 sentences).`;
+  }
+
   const parts = contexts.map((c) => normalizeWhitespace(c.content));
   let contextBlock = parts.join("\n\n");
   if (contextBlock.length > MAX_CONTEXT_CHARS) {
     contextBlock = contextBlock.slice(0, MAX_CONTEXT_CHARS);
-    // Try to end at a paragraph
     const lastBreak = contextBlock.lastIndexOf("\n\n");
     if (lastBreak > MAX_CONTEXT_CHARS * 0.7) {
       contextBlock = contextBlock.slice(0, lastBreak);
@@ -208,7 +251,7 @@ function buildPrompt(query, contexts) {
   }
   
   return [
-    `You are the portfolio owner. Answer the following question in first person, warm and conversational tone.`,
+    `You are the portfolio owner answering questions about yourself. Use the information below to answer.`,
     ``,
     `Question: ${query}`,
     ``,
@@ -216,34 +259,49 @@ function buildPrompt(query, contexts) {
     contextBlock,
     ``,
     `Instructions:`,
-    `- Answer based ONLY on the information provided above`,
-    `- Be concise but complete (3-5 sentences)`,
-    `- If the information isn't available, say "I don't have details about that in my portfolio yet"`,
-    `- Speak naturally as if talking to a recruiter`,
+    `- Answer in first person, warm and conversational`,
+    `- Be concise but complete (2-4 sentences)`,
+    `- Only use the information provided above`,
+    `- If the information doesn't fully answer the question, acknowledge what you do know`,
   ].join("\n");
 }
 
-function buildFallbackAnswer(contexts) {
+function buildFallbackAnswer(contexts, query) {
   if (!contexts.length) {
-    return "I don't have details about that in my portfolio yet, but I'd be happy to discuss it in person.";
+    return "I don't have those details in my portfolio yet, but I'd be happy to chat about it in person!";
   }
   
-  // Pick the most relevant context (lowest score = highest similarity)
+  // Return the most relevant content directly
   const bestContext = contexts[0];
   const text = normalizeWhitespace(bestContext.content);
   
-  // Return first 2-3 sentences
+  // Get first few sentences
   const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
-  const selected = sentences.slice(0, 3).join(" ").trim();
+  let result = sentences.slice(0, 2).join(" ").trim();
   
-  return selected || text.slice(0, 300);
+  if (result.length < 50 && sentences.length > 2) {
+    result = sentences.slice(0, 3).join(" ").trim();
+  }
+  
+  return result || text.slice(0, 250);
 }
 
 async function retrieveContext(query) {
   const vectors = loadVectors();
-  if (!vectors.length) return [];
+  
+  if (!vectors.length) {
+    console.error("No vectors loaded, cannot retrieve context");
+    return [];
+  }
 
-  const queryEmbedding = await openaiEmbed(query);
+  let queryEmbedding;
+  try {
+    queryEmbedding = await openaiEmbed(query);
+  } catch (err) {
+    console.error("Embedding failed:", err.message);
+    return [];
+  }
+  
   let queryNorm = 0;
   for (const val of queryEmbedding) queryNorm += val * val;
   queryNorm = Math.sqrt(queryNorm);
@@ -251,21 +309,26 @@ async function retrieveContext(query) {
   const topic = inferTopic(query);
   const summaryOnly = isSummaryIntent(query);
 
+  console.log(`Query: "${query}" | Topic: ${topic} | Summary: ${summaryOnly}`);
+
   const scored = [];
   const seenHashes = new Set();
   
   for (const item of vectors) {
     const meta = item.metadata || {};
     
-    // Topic filtering - be more lenient
+    // Topic filtering - MORE LENIENT
+    // Only filter by topic if we have high confidence, otherwise include all
     if (topic && meta.topic && meta.topic !== topic) {
-      // Still include if similarity is high enough
-      continue;
+      // Still calculate similarity - might be relevant despite wrong topic tag
+      // We'll just deprioritize it slightly rather than exclude
     }
     
-    if (summaryOnly && meta.layer && meta.layer !== "summary") continue;
+    if (summaryOnly && meta.layer && meta.layer !== "summary") {
+      // For summary queries, prefer summaries but don't exclude others
+    }
 
-    const hash = meta.content_hash || JSON.stringify(item.content).slice(0, 50);
+    const hash = meta.content_hash || item.id;
     if (hash && seenHashes.has(hash)) continue;
     if (hash) seenHashes.add(hash);
 
@@ -276,30 +339,40 @@ async function retrieveContext(query) {
       item.norm
     );
     
-    // FIXED: Lower layer_rank = higher priority (summary = 1, detail = 3)
-    // So we boost score for lower ranks (better content)
+    // FIXED scoring: Higher similarity = better (lower score)
+    // Layer rank: Lower number = more important (summary=1, detail=3)
     const layerRank = Number(meta.layer_rank || 2);
-    const layerBoost = (4 - layerRank) * 0.05; // summary=0.15, detail=0.05
+    const layerBoost = (4 - layerRank) * 0.02; // Small boost for important layers
     
-    // Score is distance (lower is better), so we subtract boost
-    const score = (1 - sim) - layerBoost;
+    // Combined score: distance minus boost (lower is better)
+    const distance = 1 - sim;
+    const score = distance - layerBoost;
+    
+    // If topic matches exactly, give extra boost
+    const topicBoost = (topic && meta.topic === topic) ? 0.1 : 0;
     
     scored.push({
-      score,
+      score: score - topicBoost,
       similarity: sim,
       metadata: meta,
       content: item.content,
     });
   }
   
+  if (!scored.length) {
+    return [];
+  }
+  
   // Sort by score ascending (lower = better)
   scored.sort((a, b) => a.score - b.score);
   
-  // Return top 5, but ensure we have at least some minimum similarity
+  // Return top matches with decent similarity
   const results = scored.slice(0, 5);
+  console.log(`Top similarity: ${results[0]?.similarity?.toFixed(3)}, Score: ${results[0]?.score?.toFixed(3)}`);
   
-  // If best match is very poor, return empty to trigger fallback
-  if (results.length > 0 && results[0].similarity < 0.3) {
+  // Only filter out if similarity is extremely low (< 0.2)
+  if (results[0].similarity < 0.2) {
+    console.log("Best match has very low similarity, returning empty");
     return [];
   }
   
@@ -314,7 +387,7 @@ async function callGemini(prompt) {
   const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT * 1000);
   
   try {
-    // FIXED: Removed space in URL
+    // FIXED URL - no space
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
     
     const resp = await fetch(url, {
@@ -330,13 +403,23 @@ async function callGemini(prompt) {
           maxOutputTokens: 1024,
           topP: 0.9,
         },
+        safetySettings: [
+          {
+            category: "HARM_CATEGORY_HARASSMENT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE"
+          },
+          {
+            category: "HARM_CATEGORY_HATE_SPEECH",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE"
+          }
+        ]
       }),
       signal: controller.signal,
     });
     
     if (!resp.ok) {
       const errorText = await resp.text();
-      console.error("Gemini API error:", resp.status, errorText);
+      console.error("Gemini API error:", resp.status, errorText.slice(0, 500));
       throw new Error(`Generation failed (${resp.status})`);
     }
     
@@ -351,10 +434,12 @@ async function callGemini(prompt) {
       throw new Error("No response generated");
     }
     
-    // Check for finish reason
     const finishReason = candidates[0].finishReason;
-    if (finishReason && finishReason !== "STOP") {
+    if (finishReason && finishReason !== "STOP" && finishReason !== "MAX_TOKENS") {
       console.warn("Gemini finish reason:", finishReason);
+      if (finishReason === "SAFETY") {
+        return "I'd prefer to discuss that topic in person. Is there something else about my portfolio you'd like to know?";
+      }
     }
     
     const parts = candidates[0]?.content?.parts || [];
@@ -365,6 +450,11 @@ async function callGemini(prompt) {
     }
     
     return text;
+  } catch (err) {
+    if (err?.name === "AbortError") {
+      throw new Error("Response timeout");
+    }
+    throw err;
   } finally {
     clearTimeout(timeout);
   }
@@ -381,7 +471,7 @@ async function streamGemini(prompt, res) {
   let fullText = "";
   
   try {
-    // FIXED: Removed space in URL
+    // FIXED URL - no space
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?key=${apiKey}`;
     
     const resp = await fetch(url, {
@@ -397,6 +487,12 @@ async function streamGemini(prompt, res) {
           maxOutputTokens: 1024,
           topP: 0.9,
         },
+        safetySettings: [
+          {
+            category: "HARM_CATEGORY_HARASSMENT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE"
+          }
+        ]
       }),
       signal: controller.signal,
     });
@@ -426,7 +522,6 @@ async function streamGemini(prompt, res) {
         try {
           const payload = JSON.parse(line);
           
-          // Check for errors in stream
           if (payload.error) {
             console.error("Stream error:", payload.error);
             continue;
@@ -434,9 +529,10 @@ async function streamGemini(prompt, res) {
           
           const candidates = payload.candidates || [];
           for (const candidate of candidates) {
-            // Check finish reason
-            if (candidate.finishReason && candidate.finishReason !== "STOP") {
-              console.warn("Stream finish reason:", candidate.finishReason);
+            if (candidate.finishReason === "SAFETY") {
+              res.write("I'd prefer to discuss that in person. What else would you like to know?");
+              wrote = true;
+              return { wrote, fullText };
             }
             
             const parts = candidate.content?.parts || [];
@@ -446,7 +542,6 @@ async function streamGemini(prompt, res) {
                 fullText += part.text;
                 wrote = true;
                 
-                // Try to flush if available
                 if (typeof res.flush === "function") {
                   res.flush();
                 }
@@ -454,8 +549,7 @@ async function streamGemini(prompt, res) {
             }
           }
         } catch (e) {
-          // Log parse errors but continue
-          console.debug("Parse error in stream:", e.message);
+          // Ignore parse errors
         }
       }
     }
@@ -463,7 +557,7 @@ async function streamGemini(prompt, res) {
     return { wrote, fullText };
   } catch (err) {
     if (err?.name === "AbortError") {
-      console.log("Stream timeout, returning what we have");
+      console.log("Stream timeout, returning partial");
       return { wrote, fullText };
     }
     throw err;
@@ -497,7 +591,6 @@ async function readJsonBody(req) {
 }
 
 export default async function handler(req, res) {
-  // CORS headers for all responses
   const setCors = () => {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -533,44 +626,54 @@ export default async function handler(req, res) {
     res.setHeader("X-Accel-Buffering", "no");
     res.setHeader("Transfer-Encoding", "chunked");
 
+    console.log("Processing query:", question);
+
     const contexts = await retrieveContext(question);
     const summaryIntent = isSummaryIntent(question);
     const topic = inferTopic(question);
 
-    // More lenient evidence check
+    console.log(`Found ${contexts.length} contexts`);
+
+    // Handle sensitive queries
     if (isSensitiveQuery(question) && !hasEvidence(question, contexts)) {
       res.end("I'd prefer to discuss those details in person during our conversation.");
       return;
     }
 
-    // Only block if truly no context AND it's a specific topic query
-    if (!contexts.length && topic) {
-      res.end("I don't have details about that in my portfolio yet, but I'd be happy to discuss it.");
+    // Only block truly empty contexts for topic-specific queries
+    if (!contexts.length && topic && !summaryIntent) {
+      res.end("I don't have specific details about that in my portfolio, but I'd be happy to discuss it with you directly!");
       return;
     }
 
     const prompt = buildPrompt(question, contexts);
-    const fallbackAnswer = buildFallbackAnswer(contexts);
+    const fallbackAnswer = buildFallbackAnswer(contexts, question);
 
     // Try streaming first
-    const streamResult = await streamGemini(prompt, res);
-    
-    if (!streamResult.wrote) {
-      // If nothing written, try non-streaming
+    try {
+      const streamResult = await streamGemini(prompt, res);
+      
+      if (!streamResult.wrote) {
+        // If nothing written, try non-streaming
+        const answer = await callGemini(prompt);
+        res.end(answer);
+      } else {
+        res.end();
+      }
+    } catch (streamErr) {
+      console.error("Streaming failed:", streamErr.message);
+      // Fall back to non-streaming
       try {
         const answer = await callGemini(prompt);
         res.end(answer);
-      } catch (err) {
-        console.error("Non-streaming failed:", err.message);
+      } catch (geminiErr) {
+        console.error("Non-streaming also failed:", geminiErr.message);
         res.end(fallbackAnswer);
       }
-    } else {
-      // Successfully streamed something
-      res.end();
     }
     
   } catch (err) {
-    console.error("Handler error:", err.message);
+    console.error("Handler error:", err.message, err.stack);
     
     if (res.headersSent) {
       res.end();
