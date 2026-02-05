@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FaComment, FaTimes, FaExclamationTriangle, FaPaperPlane } from 'react-icons/fa';
 
 // --- Configuration ---
-const API_URL = 'https://rol2810-my-portfolio-ai.hf.space/ask'; // <-- *** UPDATE THIS URL ***
+const API_URL = import.meta.env.VITE_CHATBOT_API_URL || '/api/ask';
 
 // --- List of Suggested Questions ---
 // These questions will be shown initially as suggestions
@@ -112,7 +112,7 @@ const ChatbotComponent = ({ showBot, setShowBot }) => {
                      if (typingMessageIndex === -1) return prev;
 
                      const messageToUpdate = { ...prev[typingMessageIndex] };
-                     messageToupdate.text = `Error: ${errorDetails}`;
+                     messageToUpdate.text = `Error: ${errorDetails}`;
                      messageToUpdate.isTyping = false;
 
                      const newMessages = [...prev];

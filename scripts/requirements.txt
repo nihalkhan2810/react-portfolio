@@ -1,0 +1,8 @@
+langchain>=0.2.10
+langchain-community>=0.2.10
+langchain-chroma>=0.1.4
+langchain-openai>=0.1.17
+langchain-text-splitters>=0.2.2
+chromadb>=0.5.5
+tiktoken>=0.7.0
+pyyaml>=6.0.1

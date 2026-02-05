@@ -1,0 +1,5 @@
+langchain-openai>=0.1.17
+langchain-chroma>=0.1.4
+chromadb>=0.5.5
+openai>=1.30.0
+requests>=2.32.3
