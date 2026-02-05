@@ -17,7 +17,7 @@ const POSSIBLE_VECTOR_PATHS = [
 
 const EMBEDDING_MODEL =
   process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-small";
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3-flash-preview";
 
 const OPENAI_TIMEOUT = Number(process.env.OPENAI_TIMEOUT_SEC || 15);
 const GEMINI_TIMEOUT = Number(process.env.GEMINI_TIMEOUT_SEC || 30);
