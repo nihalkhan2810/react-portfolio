@@ -261,7 +261,6 @@ function buildPrompt(query, contexts) {
     `Instructions:`,
     `- Answer in first person, warm and conversational`,
     `- Be concise but complete (2-4 sentences)`,
-    `- Only use the information provided above`,
     `- If the information doesn't fully answer the question, acknowledge what you do know`,
   ].join("\n");
 }
