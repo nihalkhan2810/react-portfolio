@@ -212,6 +212,29 @@ function buildPrompt(query, contexts) {
   ].join("\n");
 }
 
+function truncateAtSentence(text, maxChars) {
+  if (text.length <= maxChars) return text;
+  const truncated = text.slice(0, maxChars);
+  const lastStop = Math.max(
+    truncated.lastIndexOf(". "),
+    truncated.lastIndexOf("! "),
+    truncated.lastIndexOf("? ")
+  );
+  if (lastStop > maxChars * 0.5) {
+    return truncated.slice(0, lastStop + 1).trim();
+  }
+  return truncated.trim();
+}
+
+function buildFallbackAnswer(contexts) {
+  if (!contexts.length) {
+    return "I don't have that information in my portfolio data.";
+  }
+  const merged = normalizeWhitespace(contexts.map((c) => c.content).join(" "));
+  const trimmed = truncateAtSentence(merged, 500);
+  return trimmed || "I don't have that information in my portfolio data.";
+}
+
 async function retrieveContext(query) {
   const vectors = loadVectors();
   const queryEmbedding = await openaiEmbed(query);
@@ -289,8 +312,15 @@ async function callGemini(prompt) {
     }
     const data = await resp.json();
     const candidates = data.candidates || [];
+    if (!candidates.length) {
+      throw new Error("Gemini returned no candidates.");
+    }
     const parts = candidates[0]?.content?.parts || [];
-    return parts.map((p) => p.text || "").join("").trim();
+    const text = parts.map((p) => p.text || "").join("").trim();
+    if (!text) {
+      throw new Error("Gemini returned empty text.");
+    }
+    return text;
   } finally {
     clearTimeout(timeout);
   }
@@ -419,6 +449,8 @@ export default async function handler(req, res) {
 
     res.setHeader("Content-Type", "text/plain; charset=utf-8");
     res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.setHeader("Transfer-Encoding", "chunked");
     res.setHeader("X-Gemini-Model", GEMINI_MODEL);
     res.flushHeaders?.();
 
@@ -437,6 +469,7 @@ export default async function handler(req, res) {
     }
 
     const prompt = buildPrompt(question, contexts);
+    const fallbackAnswer = buildFallbackAnswer(contexts);
 
     const streamed = await streamGemini(prompt, res);
     if (!streamed) {
@@ -444,10 +477,7 @@ export default async function handler(req, res) {
         const answer = await callGemini(prompt);
         res.end(answer);
       } catch {
-        const fallback = normalizeWhitespace(
-          contexts.map((c) => c.content).join(" ")
-        );
-        res.end(fallback || "I don't have enough information to answer that.");
+        res.end(fallbackAnswer);
       }
       return;
     }
