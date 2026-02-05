@@ -15,6 +15,9 @@ VECTOR_PATH = ROOT_DIR / "db" / "kb_vectors.json"
 
 EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+OPENAI_TIMEOUT = float(os.getenv("OPENAI_TIMEOUT_SEC", "6"))
+GEMINI_TIMEOUT = float(os.getenv("GEMINI_TIMEOUT_SEC", "8"))
+MAX_CONTEXT_CHARS = int(os.getenv("MAX_CONTEXT_CHARS", "6000"))
 
 LAYER_RANK = {"summary": 0, "window": 1, "section": 2, "file": 3, "fallback": 4}
 SUMMARY_TRIGGERS = (
@@ -115,7 +118,7 @@ def _openai_embed(text: str) -> List[float]:
         "https://api.openai.com/v1/embeddings",
         headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
         json={"model": EMBEDDING_MODEL, "input": text},
-        timeout=30,
+        timeout=OPENAI_TIMEOUT,
     )
     resp.raise_for_status()
     payload = resp.json()
@@ -195,6 +198,20 @@ def retrieve_context(
     return top, sources
 
 
+def fallback_context(query: str, top_k: int = 3) -> List[Dict]:
+    _load_vectors()
+    topic = _infer_topic(query)
+    candidates = [v for v in VECTORS if v.metadata.get("layer") == "summary"]
+    if topic:
+        topic_candidates = [v for v in candidates if v.metadata.get("topic") == topic]
+        if topic_candidates:
+            candidates = topic_candidates
+    if not candidates:
+        candidates = VECTORS
+    picked = candidates[:top_k]
+    return [{"metadata": v.metadata, "content": v.content} for v in picked]
+
+
 def build_prompt(query: str, contexts: List[Dict]) -> str:
     parts: List[str] = []
     for item in contexts:
@@ -206,6 +223,8 @@ def build_prompt(query: str, contexts: List[Dict]) -> str:
         parts.append(f"[{label}] {snippet}")
 
     context_block = "\n".join(parts)
+    if len(context_block) > MAX_CONTEXT_CHARS:
+        context_block = context_block[:MAX_CONTEXT_CHARS]
     return (
         "Question: " + query + "\n\n"
         "Context:\n" + context_block + "\n\n"
@@ -235,7 +254,7 @@ def call_gemini(prompt: str) -> str:
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
         "generationConfig": {"temperature": 0.3, "maxOutputTokens": 512},
     }
-    response = requests.post(url, json=payload, timeout=30)
+    response = requests.post(url, json=payload, timeout=GEMINI_TIMEOUT)
     response.raise_for_status()
     data = response.json()
     candidates = data.get("candidates") or []
@@ -261,9 +280,16 @@ class handler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({"error": "Missing query"}).encode("utf-8"))
                 return
 
-            contexts, _sources = retrieve_context(query)
+            try:
+                contexts, _sources = retrieve_context(query)
+            except requests.Timeout:
+                contexts = fallback_context(query)
             prompt = build_prompt(query, contexts)
-            answer = call_gemini(prompt)
+            try:
+                answer = call_gemini(prompt)
+            except requests.Timeout:
+                snippets = [c["content"] for c in contexts]
+                answer = " ".join(snippets).strip() or "I don't have enough information to answer that."
 
             self.send_response(200)
             self.send_header("Content-Type", "text/plain; charset=utf-8")
