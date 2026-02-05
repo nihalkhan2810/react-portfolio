@@ -1,50 +1,43 @@
 import json
+import math
 import os
 import re
-import shutil
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from http.server import BaseHTTPRequestHandler
 
 import requests
-from langchain_chroma import Chroma
-from langchain_openai import OpenAIEmbeddings
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
-PERSIST_SRC = ROOT_DIR / "db" / "chroma"
-PERSIST_DIR = Path(os.getenv("CHROMA_PERSIST_DIR", "/tmp/chroma"))
-COLLECTION = os.getenv("CHROMA_COLLECTION", "kb_docs")
+VECTOR_PATH = ROOT_DIR / "db" / "kb_vectors.json"
+
 EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
 
 LAYER_RANK = {"summary": 0, "window": 1, "section": 2, "file": 3, "fallback": 4}
-
-VDB = None
-
-
-def _ensure_persist_dir() -> Path:
-    if PERSIST_DIR == PERSIST_SRC:
-        return PERSIST_SRC
-    if not PERSIST_DIR.exists():
-        if not PERSIST_SRC.exists():
-            raise FileNotFoundError(f"Chroma directory not found: {PERSIST_SRC}")
-        shutil.copytree(PERSIST_SRC, PERSIST_DIR)
-    return PERSIST_DIR
+SUMMARY_TRIGGERS = (
+    "summarize",
+    "summary",
+    "overview",
+    "who are you",
+    "about you",
+    "tell me about yourself",
+    "background",
+)
 
 
-def _get_vectordb() -> Chroma:
-    global VDB
-    if VDB is not None:
-        return VDB
-    persist_dir = _ensure_persist_dir()
-    embeddings = OpenAIEmbeddings(model=EMBEDDING_MODEL)
-    VDB = Chroma(
-        collection_name=COLLECTION,
-        embedding_function=embeddings,
-        persist_directory=str(persist_dir),
-    )
-    return VDB
+@dataclass
+class VectorItem:
+    content: str
+    embedding: List[float]
+    metadata: Dict
+    norm: float
+
+
+VECTORS: List[VectorItem] = []
+VECTORS_LOADED = False
 
 
 def _strip_frontmatter(text: str) -> str:
@@ -66,6 +59,11 @@ def _normalize_whitespace(text: str) -> str:
     return re.sub(r"\s+", " ", text.strip())
 
 
+def _is_summary_intent(query: str) -> bool:
+    q = query.lower()
+    return any(trigger in q for trigger in SUMMARY_TRIGGERS)
+
+
 def _infer_topic(query: str) -> Optional[str]:
     q = query.lower()
     if "project" in q:
@@ -81,87 +79,119 @@ def _infer_topic(query: str) -> Optional[str]:
     return None
 
 
-def _is_summary_intent(query: str) -> bool:
-    q = query.lower()
-    triggers = [
-        "summarize",
-        "summary",
-        "overview",
-        "who are you",
-        "about you",
-        "tell me about yourself",
-        "background",
-    ]
-    return any(t in q for t in triggers)
+def _load_vectors() -> None:
+    global VECTORS_LOADED
+    if VECTORS_LOADED:
+        return
+    if not VECTOR_PATH.exists():
+        raise FileNotFoundError(f"Vector file not found: {VECTOR_PATH}")
+
+    data = json.loads(VECTOR_PATH.read_text(encoding="utf-8"))
+    items = data.get("vectors", [])
+    vectors: List[VectorItem] = []
+    for item in items:
+        embedding = item.get("embedding") or []
+        if not embedding:
+            continue
+        norm = math.sqrt(sum(x * x for x in embedding))
+        vectors.append(
+            VectorItem(
+                content=_strip_frontmatter(item.get("content") or ""),
+                embedding=embedding,
+                metadata=item.get("metadata") or {},
+                norm=norm,
+            )
+        )
+    VECTORS.clear()
+    VECTORS.extend(vectors)
+    VECTORS_LOADED = True
 
 
-def _build_filter(
-    topic: Optional[str],
-    layer: Optional[str],
-    retrieval_tier: Optional[str],
-) -> Dict:
+def _openai_embed(text: str) -> List[float]:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is not set.")
+    resp = requests.post(
+        "https://api.openai.com/v1/embeddings",
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        json={"model": EMBEDDING_MODEL, "input": text},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    payload = resp.json()
+    data = payload.get("data", [])
+    if not data:
+        raise RuntimeError("No embedding returned.")
+    return data[0]["embedding"]
+
+
+def _cosine_similarity(vec_a: List[float], norm_a: float, vec_b: List[float], norm_b: float) -> float:
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    dot = sum(a * b for a, b in zip(vec_a, vec_b))
+    return dot / (norm_a * norm_b)
+
+
+def _build_filter(topic: Optional[str], layer: Optional[str]) -> Dict:
     filters: Dict = {}
     if topic:
         filters["topic"] = topic
     if layer:
         filters["layer"] = layer
-    if retrieval_tier:
-        filters["retrieval_tier"] = retrieval_tier
     return filters
-
-
-def _score(distance: float, layer_rank: int, layer_bias: float) -> float:
-    return distance + (layer_bias * (layer_rank / 10.0))
 
 
 def retrieve_context(
     query: str,
     top_k: int = 5,
-    fetch_k: int = 15,
     layer_bias: float = 0.15,
 ) -> Tuple[List[Dict], List[str]]:
-    vectordb = _get_vectordb()
+    _load_vectors()
+    query_embedding = _openai_embed(query)
+    query_norm = math.sqrt(sum(x * x for x in query_embedding))
+
     topic = _infer_topic(query)
     layer = "summary" if _is_summary_intent(query) else None
-    filters = _build_filter(topic, layer, None) or None
+    filters = _build_filter(topic, layer)
 
-    results = vectordb.similarity_search_with_score(
-        query,
-        k=fetch_k,
-        filter=filters,
-    )
-
-    seen_hashes: set[str] = set()
     scored: List[Dict] = []
-    for doc, distance in results:
-        meta = doc.metadata or {}
+    seen_hashes: set[str] = set()
+    for item in VECTORS:
+        meta = item.metadata
+        if filters:
+            if "topic" in filters and meta.get("topic") != filters["topic"]:
+                continue
+            if "layer" in filters and meta.get("layer") != filters["layer"]:
+                continue
+
         content_hash = meta.get("content_hash")
         if content_hash and content_hash in seen_hashes:
             continue
         if content_hash:
             seen_hashes.add(content_hash)
 
-        layer_rank = int(meta.get("layer_rank", 9))
-        adjusted = _score(distance, layer_rank, layer_bias)
+        sim = _cosine_similarity(query_embedding, query_norm, item.embedding, item.norm)
+        distance = 1.0 - sim
+        layer_rank = int(meta.get("layer_rank", LAYER_RANK["file"]))
+        score = distance + (layer_bias * (layer_rank / 10.0))
+
         scored.append(
             {
-                "score": adjusted,
+                "score": score,
                 "distance": distance,
                 "metadata": meta,
-                "content": _strip_frontmatter(doc.page_content or ""),
+                "content": item.content,
             }
         )
 
     scored.sort(key=lambda x: x["score"])
     top = scored[:top_k]
-
     sources: List[str] = []
     for item in top:
         meta = item["metadata"]
         source = meta.get("source_path") or "kb"
         title = meta.get("title") or meta.get("section_title") or "Context"
         sources.append(f"{title} ({source})")
-
     return top, sources
 
 
@@ -230,9 +260,6 @@ class handler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(json.dumps({"error": "Missing query"}).encode("utf-8"))
                 return
-
-            if not os.getenv("OPENAI_API_KEY"):
-                raise RuntimeError("OPENAI_API_KEY is not set.")
 
             contexts, _sources = retrieve_context(query)
             prompt = build_prompt(query, contexts)
