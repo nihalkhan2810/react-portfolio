@@ -1,521 +1,578 @@
-// ChatbotComponent.jsx
-import React, { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { FaComment, FaTimes, FaPaperPlane, FaTrash } from 'react-icons/fa';
+import React, { useMemo, useRef, useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { FaComment, FaTimes, FaPaperPlane, FaTrash } from "react-icons/fa";
 
-// --- Configuration ---
-const API_URL = 'https://rol2810-my-portfolio-ai.hf.space/ask'; // <-- *** UPDATE THIS URL ***
-const CLEAR_HISTORY_URL = API_URL.replace(/\/ask\/?$/, '/clear_history');
-const SESSION_STORAGE_KEY = 'chat_session_id';
+const API_URL = "https://rol2810-my-portfolio-ai.hf.space/ask";
+const CLEAR_HISTORY_URL = API_URL.replace(/\/ask\/?$/, "/clear_history");
+const SESSION_STORAGE_KEY = "chat_session_id";
 
-const getOrCreateSessionId = () => {
-    try {
-        const existingSessionId = localStorage.getItem(SESSION_STORAGE_KEY);
-        if (existingSessionId) return existingSessionId;
-
-        const generatedSessionId =
-            'session_' + Date.now() + '_' + Math.random().toString(36).slice(2, 11);
-        localStorage.setItem(SESSION_STORAGE_KEY, generatedSessionId);
-        return generatedSessionId;
-    } catch (error) {
-        return 'session_' + Date.now();
-    }
-};
-
-// --- List of Suggested Questions ---
-// These questions will be shown initially as suggestions
 const suggestedQuestions = [
-    "Tell me about your experience.",
-    "What are your key skills?",
-    "Describe one of your projects.",
-    "How was this chatbot built?",
-    "What are your future project ideas?",
-    "What is your education background?",
-    "Tell me about your role as a Research Assistant.",
-    "What is your experience with PyTorch?",
-    "List some cloud or DevOps tools you've used.",
-    "What is your visa status?", // Added visa status for easier access
+  "Tell me about your experience.",
+  "What are your key skills?",
+  "Describe one of your projects.",
+  "How was this chatbot built?",
+  "What are your future project ideas?",
+  "What is your education background?",
+  "Tell me about your role as a Research Assistant.",
+  "What is your experience with PyTorch?",
+  "List some cloud or DevOps tools you've used.",
+  "What is your visa status?",
 ];
 
+const getOrCreateSessionId = () => {
+  try {
+    const existingSessionId = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (existingSessionId) return existingSessionId;
+    const generated =
+      "session_" + Date.now() + "_" + Math.random().toString(36).slice(2, 11);
+    localStorage.setItem(SESSION_STORAGE_KEY, generated);
+    return generated;
+  } catch {
+    return "session_" + Date.now();
+  }
+};
 
-// --- Chatbot Component ---
-const ChatbotComponent = ({ showBot, setShowBot }) => {
-    const [messages, setMessages] = useState([{
-        type: 'ai',
-        text: 'Hi! I can answer questions about my portfolio. Ask me anything!' // Initial welcome message
-    }]);
-    const [input, setInput] = useState(''); // State for the current input text
-    const [isLoading, setIsLoading] = useState(false); // Overall loading state
-    const messagesEndRef = useRef(null); // Ref for auto-scrolling messages
+const escapeHtml = (value) =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 
-    // --- State for suggested questions ---
-    // Use a Set to easily filter suggestions after click
-    const [visibleSuggestions, setVisibleSuggestions] = useState(new Set(suggestedQuestions)); // Set of questions still visible
-    // State to control the visibility of the entire suggestion *bar* initially
-    const [showInitialSuggestions, setShowInitialSuggestions] = useState(true); // True initially
-    const sessionIdRef = useRef(getOrCreateSessionId());
-    const [showIntroSpotlight, setShowIntroSpotlight] = useState(false);
+const formatInlineMarkdown = (line) => {
+  let output = line;
+  output = output.replace(/`([^`]+)`/g, "<code>$1</code>");
+  output = output.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  output = output.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+  output = output.replace(
+    /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+    '<a href="$2" target="_blank" rel="noreferrer">$1</a>'
+  );
+  return output;
+};
 
-    // --- State for per-message typing indicator ---
-    // This is handled by the isTyping flag on the message object
+const markdownToHtml = (raw) => {
+  if (!raw) return "";
 
-    const toggleBot = () => {
-        setShowBot(false);
-        // Optional: Clear messages and reset suggestions when closing
-        // setMessages([{ type: 'ai', text: 'Hi! I can answer questions about my portfolio. Ask me anything!' }]);
-        // setVisibleSuggestions(new Set(suggestedQuestions)); // Reset suggestions when closing
-        // setShowInitialSuggestions(true); // Reset suggestion bar visibility when closing
-    };
+  const escaped = escapeHtml(raw).replace(/\r\n/g, "\n");
+  const fenced = [];
+  const withFenceTokens = escaped.replace(/```([\s\S]*?)```/g, (_, block) => {
+    fenced.push(`<pre><code>${block.trim()}</code></pre>`);
+    return `@@FENCE_${fenced.length - 1}@@`;
+  });
 
-    const clearConversationHistory = async () => {
-        try {
-            await fetch(CLEAR_HISTORY_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ session_id: sessionIdRef.current }),
-            });
-        } catch (error) {
-            console.error('Error clearing conversation history:', error);
-        }
-    };
+  const lines = withFenceTokens.split("\n");
+  const html = [];
+  let inUl = false;
+  let inOl = false;
 
-    const handleClearChat = async () => {
-        await clearConversationHistory();
-        setMessages([{
-            type: 'ai',
-            text: 'Hi! I can answer questions about my portfolio. Ask me anything!'
-        }]);
-        setVisibleSuggestions(new Set(suggestedQuestions));
-        setShowInitialSuggestions(true);
-    };
+  const closeLists = () => {
+    if (inUl) {
+      html.push("</ul>");
+      inUl = false;
+    }
+    if (inOl) {
+      html.push("</ol>");
+      inOl = false;
+    }
+  };
 
-    // Effect to auto-scroll to the latest message whenever messages change
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
+  for (const line of lines) {
+    const trimmed = line.trim();
 
-    // Spotlight intro on load/reload to guide users to the chatbot.
-    useEffect(() => {
-        const showTimer = setTimeout(() => {
-            setShowIntroSpotlight(true);
-        }, 900);
+    if (!trimmed) {
+      closeLists();
+      continue;
+    }
 
-        const hideTimer = setTimeout(() => {
-            setShowIntroSpotlight(false);
-        }, 8500);
+    if (trimmed.startsWith("@@FENCE_")) {
+      closeLists();
+      html.push(trimmed);
+      continue;
+    }
 
-        return () => {
-            clearTimeout(showTimer);
-            clearTimeout(hideTimer);
-        };
-    }, []);
+    const heading = trimmed.match(/^(#{1,6})\s+(.*)$/);
+    if (heading) {
+      closeLists();
+      const level = heading[1].length;
+      html.push(`<h${level}>${formatInlineMarkdown(heading[2])}</h${level}>`);
+      continue;
+    }
 
-    useEffect(() => {
-        if (showBot) {
-            setShowIntroSpotlight(false);
-        }
-    }, [showBot]);
+    const ulMatch = trimmed.match(/^[-*]\s+(.*)$/);
+    if (ulMatch) {
+      if (inOl) {
+        html.push("</ol>");
+        inOl = false;
+      }
+      if (!inUl) {
+        html.push("<ul>");
+        inUl = true;
+      }
+      html.push(`<li>${formatInlineMarkdown(ulMatch[1])}</li>`);
+      continue;
+    }
 
-    // Modified handleSend to accept an optional query string (used by suggestions)
-    const handleSend = async (query = input) => { // Default query to current input
-        const userQuestion = query.trim(); // Use the provided query or current input
+    const olMatch = trimmed.match(/^\d+\.\s+(.*)$/);
+    if (olMatch) {
+      if (inUl) {
+        html.push("</ul>");
+        inUl = false;
+      }
+      if (!inOl) {
+        html.push("<ol>");
+        inOl = true;
+      }
+      html.push(`<li>${formatInlineMarkdown(olMatch[1])}</li>`);
+      continue;
+    }
 
-        if (!userQuestion || isLoading) return;
+    if (trimmed.startsWith("&gt;")) {
+      closeLists();
+      html.push(
+        `<blockquote>${formatInlineMarkdown(
+          trimmed.replace(/^&gt;\s?/, "")
+        )}</blockquote>`
+      );
+      continue;
+    }
 
-        // --- Hide suggestions after the first user message ---
-        // Check if the current messages state only contains the initial AI message (length 1)
-        if (messages.length === 1 && messages[0].type === 'ai' && !messages[0].isTyping) {
-            setShowInitialSuggestions(false); // Hide the suggestions bar
-        }
-        // --- End Hide suggestions logic ---
+    closeLists();
+    html.push(`<p>${formatInlineMarkdown(trimmed)}</p>`);
+  }
 
-
-        const userMessage = { type: 'user', text: userQuestion };
-
-        // Clear input ONLY if sending from the input field (not clicking suggestion)
-        if (query === input) {
-           setInput('');
-        }
-
-        setMessages(prev => [...prev, userMessage]); // Add user message
-
-        setIsLoading(true); // Set overall loading state
-
-        // Add a placeholder message for the AI's response that we will update via streaming
-        setMessages(prev => [...prev, { type: 'ai', text: '', isTyping: true }]); // Add isTyping flag
-
-
-        try {
-            // Use fetch to initiate the POST request
-            const response = await fetch(API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    query: userQuestion,
-                    session_id: sessionIdRef.current
-                }),
-            });
-
-            if (!response.ok) {
-                 let errorDetails = `Request failed (${response.status})`;
-                 try {
-                     const errorJson = await response.json();
-                     if(errorJson && errorJson.error) errorDetails = `Request failed (${response.status}): ${errorJson.error}`;
-                     else if (errorJson && errorJson.answer) errorDetails = `Request failed (${response.status}): ${errorJson.answer}`;
-                 } catch (e) {
-                      try {
-                           const errorText = await response.text();
-                           if(errorText) errorDetails = `Request failed (${response.status}): ${errorText.substring(0, 300)}...`;
-                      } catch (e2) {
-                           errorDetails = `Request failed (${response.status})`;
-                      }
-                 }
-
-                 // Update the last message placeholder with the error details
-                 setMessages(prev => {
-                     const typingMessageIndex = prev.findIndex(msg => msg.type === 'ai' && msg.isTyping);
-                     if (typingMessageIndex === -1) return prev;
-
-                      const messageToUpdate = { ...prev[typingMessageIndex] };
-                      messageToUpdate.text = `Error: ${errorDetails}`;
-                      messageToUpdate.isTyping = false;
-
-                     const newMessages = [...prev];
-                     newMessages[typingMessageIndex] = messageToUpdate;
-                     return newMessages;
-                 });
-                 return; // Stop here if initial response not OK
-            }
-
-            if (!response.body) {
-                 console.error('Response body is null. Cannot stream.');
-                 setMessages(prev => {
-                      const typingMessageIndex = prev.findIndex(msg => msg.type === 'ai' && msg.isTyping);
-                      if (typingMessageIndex === -1) return prev;
-
-                     const messageToUpdate = { ...prev[typingMessageIndex] };
-                     messageToUpdate.text = "Error: Response body is empty.";
-                     messageToUpdate.isTyping = false;
-                     const newMessages = [...prev];
-                     newMessages[typingMessageIndex] = messageToUpdate;
-                     return newMessages;
-                 });
-                 return; // Stop if no response body
-            }
-
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-
-            let receivedText = '';
-            while (true) {
-                const { value, done } = await reader.read();
-                if (done) break;
-
-                const chunk = decoder.decode(value, { stream: true });
-                receivedText += chunk;
-
-                setMessages(prev => {
-                    const typingMessageIndex = prev.findIndex(msg => msg.type === 'ai' && msg.isTyping);
-                     if (typingMessageIndex === -1) {
-                         console.warn("Typing message placeholder not found during stream update.");
-                         return [...prev, { type: 'ai', text: receivedText, isTyping: true }];
-                     }
-
-                    const messageToUpdate = { ...prev[typingMessageIndex] };
-                    messageToUpdate.text = receivedText;
-                    // isTyping remains true until stream is done
-
-                    const newMessages = [...prev];
-                    newMessages[typingMessageIndex] = messageToUpdate;
-                    return newMessages;
-                });
-            }
-
-            setMessages(prev => {
-                 const typingMessageIndex = prev.findIndex(msg => msg.type === 'ai' && msg.isTyping);
-                 if (typingMessageIndex === -1) return prev;
-
-                 const messageToUpdate = { ...prev[typingMessageIndex] };
-                 messageToUpdate.isTyping = false;
-                 if (!messageToUpdate.text) messageToUpdate.text = "AI response finished with no text.";
-
-                 const newMessages = [...prev];
-                 newMessages[typingMessageIndex] = messageToUpdate;
-                 return newMessages;
-            });
-
-
-        } catch (error) {
-            console.error('Error fetching AI response stream:', error);
-
-             setMessages(prev => {
-                 const typingMessageIndex = prev.findIndex(msg => msg.type === 'ai' && msg.isTyping);
-
-                 if (typingMessageIndex !== -1) {
-                      const messageToUpdate = { ...prev[typingMessageIndex] };
-                       if (!messageToUpdate.text) {
-                           messageToUpdate.text = `Error: ${error.message || 'Could not start streaming response.'}`;
-                       } else {
-                           messageToUpdate.text = messageToUpdate.text + `\n\nError: ${error.message || 'Streaming failed.'}`;
-                       }
-                      messageToUpdate.isTyping = false;
-                      const newMessages = [...prev];
-                      newMessages[typingMessageIndex] = messageToUpdate;
-                      return newMessages;
-
-                 } else {
-                      return [...prev, { type: 'ai', text: `Error: ${error.message || 'An unexpected error occurred.'}` }];
-                 }
-             });
-
-        } finally {
-            setIsLoading(false); // Turn off overall loading state
-        }
-    };
-
-    // Handle input field changes
-    const handleInputChange = (event) => {
-        setInput(event.target.value);
-    };
-
-    // Handle key presses (like 'Enter' to send)
-    const handleKeyPress = (event) => {
-        if (event.key === 'Enter' && !isLoading) {
-            event.preventDefault();
-            handleSend(); // Call handleSend without arguments, it will use current input
-        }
-    };
-
-    // --- Handler for Suggested Questions ---
-    const handleSuggestedQuestionClick = (question) => {
-        // Optional: Set input field (handleSend uses the passed question)
-        // setInput(question);
-
-        // Remove the clicked question from the visible set
-        setVisibleSuggestions(prevSuggestions => {
-            const newSuggestions = new Set(prevSuggestions);
-            newSuggestions.delete(question);
-            return newSuggestions;
-        });
-
-        // Send the question
-        handleSend(question);
-    };
-
-
-    // --- Styling ---
-    const aiMessageBubbleStyle = 'bg-gray-700 text-neutral-300 rounded-xl rounded-bl-none';
-    const userMessageBubbleStyle = 'bg-cyan-700 text-white rounded-xl rounded-br-none';
-    const headerStyle = 'bg-slate-800 text-cyan-400 p-4 rounded-t-lg flex justify-between items-center shadow-md';
-    const chatHistoryAreaStyle = 'flex-grow overflow-y-auto p-4 space-y-4 custom-scrollbar bg-gray-900 text-sm';
-    const inputAreaStyle = 'border-t border-gray-700 p-3 flex items-center gap-2 bg-gray-800';
-    const inputFieldStyle = 'flex-grow p-2 rounded-lg bg-gray-700 text-white border-none focus:outline-none focus:ring-1 focus:ring-cyan-500 disabled:opacity-50 placeholder-neutral-400 text-sm';
-    const sendButtonStyle = 'p-3 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 disabled:bg-gray-400 disabled:cursor-not-allowed focus:outline-none flex items-center justify-center';
-    const chatWindowStyle = 'absolute bottom-16 right-0 w-80 md:w-96 rounded-lg overflow-hidden shadow-2xl bg-gray-800 flex flex-col border border-gray-700';
-
-
-    // --- Animation for the floating button ---
-    const floatingButtonAnimation = showBot ? {} : {
-        y: [0, -5, 0, 0, 0, 0, 0, 0, 0, 0],
-        scale: [1, 1.05, 1, 1, 1, 1, 1, 1, 1, 1],
-        boxShadow: [
-            '0px 0px 8px rgba(6, 182, 212, 0)',
-            '0px 0px 16px rgba(6, 182, 212, 0.5)',
-            '0px 0px 8px rgba(6, 182, 212, 0)'
-        ]
-    };
-
-    const floatingButtonTransition = showBot ? {} : {
-        duration: 2.5,
-        repeat: Infinity,
-        ease: "easeInOut",
-        delay: 0.5,
-        times: [0, 0.8, 1]
-    };
-
-
-    return (
-        <>
-        <AnimatePresence>
-            {showIntroSpotlight && !showBot && (
-                <motion.div
-                    className="fixed inset-0 z-40"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.35 }}
-                    onClick={() => setShowIntroSpotlight(false)}
-                    aria-hidden="true"
-                >
-                    <div
-                        className="absolute inset-0"
-                        style={{
-                            background:
-                                'radial-gradient(circle at calc(100% - 40px) calc(100% - 40px), rgba(15, 23, 42, 0.05) 0, rgba(15, 23, 42, 0.05) 46px, rgba(2, 6, 23, 0.72) 64px)',
-                        }}
-                    />
-                    <motion.div
-                        className="absolute bottom-[74px] right-[14px] h-14 w-14 rounded-full border border-cyan-300/60"
-                        animate={{ scale: [1, 1.42, 1], opacity: [0.8, 0.2, 0.8] }}
-                        transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
-                    />
-                    <motion.div
-                        className="absolute bottom-24 right-24 max-w-[230px] rounded-xl border border-cyan-400/40 bg-slate-900/85 px-4 py-3 text-xs uppercase tracking-[0.18em] text-cyan-200 shadow-lg backdrop-blur"
-                        initial={{ y: 14, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        transition={{ duration: 0.45, delay: 0.15 }}
-                    >
-                        Ask my AI assistant
-                    </motion.div>
-                </motion.div>
-            )}
-        </AnimatePresence>
-
-        <div className="fixed bottom-4 right-4 z-50">
-            {/* Chatbot toggle button with enhanced animation when hidden */}
-            <motion.button
-                onClick={() => setShowBot(!showBot)}
-                className={`flex items-center justify-center p-4 rounded-full shadow-lg ${
-                  showBot ? 'bg-red-600' : 'bg-cyan-600'
-                } text-white transition-all duration-300 focus:outline-none z-50`}
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                animate={floatingButtonAnimation}
-                transition={floatingButtonTransition}
-                aria-label={showBot ? "Close chatbot" : "Open chatbot"}
-            >
-                <AnimatePresence mode="wait">
-                   <motion.div
-                      key={showBot ? "close" : "open"}
-                      initial={{ rotate: showBot ? -180 : 180, opacity: 0 }}
-                      animate={{ rotate: 0, opacity: 1 }}
-                      exit={{ rotate: showBot ? 180 : -180, opacity: 0 }}
-                      transition={{ duration: 0.3 }}
-                   >
-                     {showBot ? <FaTimes size={20} /> : <FaComment size={20} />}
-                   </motion.div>
-                </AnimatePresence>
-            </motion.button>
-
-            {/* Chatbot window container */}
-            <AnimatePresence>
-            {showBot && (
-                <motion.div
-                    className={chatWindowStyle}
-                    initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 20, scale: 0.95 }}
-                    transition={{ duration: 0.2 }}
-                    style={{ height: 'calc(80vh - 64px)', maxHeight: '600px' }}
-                >
-                    {/* Chat header */}
-                    <div className={headerStyle}>
-                        <div className="flex items-center">
-                            <FaComment className="mr-2 text-cyan-400" size={20} />
-                            <span className="font-medium">Ask Nihal</span>
-                        </div>
-                         <button
-                            onClick={handleClearChat}
-                            className="mr-2 text-gray-400 hover:text-white focus:outline-none"
-                            aria-label="Clear conversation history"
-                            title="Clear conversation"
-                        >
-                            <FaTrash />
-                        </button>
-                        <button
-                            onClick={toggleBot}
-                            className="text-gray-400 hover:text-white focus:outline-none"
-                            aria-label="Close chatbot"
-                        >
-                            <FaTimes />
-                        </button>
-                    </div>
-
-                    {/* Message history area */}
-                    <div className={chatHistoryAreaStyle}>
-                        {messages.map((msg, index) => (
-                           <motion.div
-                              key={index}
-                              initial={{ opacity: 0, x: msg.type === 'user' ? 20 : -20 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ duration: 0.1 }}
-                              className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}
-                           >
-                              {/* Message Bubble */}
-                              <div className={`max-w-[85%] p-3 rounded-lg whitespace-pre-wrap ${
-                                  msg.type === 'user' ? userMessageBubbleStyle : aiMessageBubbleStyle
-                              }`}>
-                                  {msg.text}
-                              </div>
-                           </motion.div>
-                        ))}
-                        {/* Loading indicator message */}
-                         {isLoading && !messages.some(msg => msg.isTyping) && (
-                            <div className="flex justify-start">
-                               <div className={`max-w-[85%] p-3 rounded-lg ${aiMessageBubbleStyle} flex items-center`}>
-                                  <div className="dot-flashing-small" />
-                                  <span className="ml-2 text-sm italic text-gray-400">Thinking...</span>
-                               </div>
-                            </div>
-                         )}
-                        {/* Scroll reference */}
-                        <div ref={messagesEndRef} />
-                    </div>
-
-                    {/* Suggested Questions Area - Horizontal, Hover-to-Scroll, Disappears after first message */}
-                    {showInitialSuggestions && visibleSuggestions.size > 0 && ( // Render only if bar should be shown and there are visible suggestions
-                       <div className="p-3 border-t border-gray-700 bg-gray-800 text-sm text-neutral-400 flex overflow-x-hidden hover:overflow-x-auto gap-2 whitespace-nowrap custom-scrollbar"> {/* Modified classes for horizontal scroll on hover */}
-                           <span className="flex-shrink-0 text-sm italic text-neutral-500">Try asking:</span> {/* Title - make non-shrinking, adjusted color */}
-                           {[...visibleSuggestions].map((q, index) => ( // Iterate over the Set
-                               <button
-                                   key={index}
-                                   onClick={() => handleSuggestedQuestionClick(q)}
-                                   disabled={isLoading}
-                                   // Modified styling for purple theme and sleekness
-                                   className="flex-shrink-0 px-3 py-1 border border-purple-600 text-purple-400 rounded-full hover:bg-purple-900 hover:border-purple-500 transition-colors duration-200 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed text-xs"
-                               >
-                                   {q}
-                               </button>
-                           ))}
-                       </div>
-                    )}
-
-
-                    {/* Input Area */}
-                    <div className={inputAreaStyle}>
-                        <input
-                            type="text"
-                            value={input}
-                            onChange={handleInputChange}
-                            onKeyPress={handleKeyPress}
-                            placeholder="Type your question..."
-                            disabled={isLoading}
-                            className={inputFieldStyle}
-                        />
-                        <button
-                            onClick={() => handleSend()}
-                            disabled={isLoading || input.trim() === ''}
-                            className={sendButtonStyle}
-                        >
-                           {isLoading ? (
-                              <motion.div
-                                 animate={{ rotate: 360 }}
-                                 transition={{ duration: 1, loop: Infinity, ease: "linear" }}
-                                 style={{ display: 'flex', alignItems: 'center' }}
-                              >
-                                 <FaPaperPlane size={18} className="opacity-70" />
-                              </motion.div>
-                           ) : (
-                              <FaPaperPlane size={18} />
-                           )}
-                        </button>
-                    </div>
-                </motion.div>
-            )}
-            </AnimatePresence>
-        </div>
-        </>
+  closeLists();
+  return html
+    .join("")
+    .replace(
+      /@@FENCE_(\d+)@@/g,
+      (_, index) => fenced[Number(index)] || "<pre><code></code></pre>"
     );
+};
+
+const TypingDots = () => (
+  <div className="flex items-center gap-1.5 py-1">
+    <span className="h-2 w-2 rounded-full bg-cyan-300/85 animate-[bounce_0.9s_infinite]" />
+    <span className="h-2 w-2 rounded-full bg-cyan-300/85 animate-[bounce_0.9s_0.15s_infinite]" />
+    <span className="h-2 w-2 rounded-full bg-cyan-300/85 animate-[bounce_0.9s_0.3s_infinite]" />
+  </div>
+);
+
+const ChatbotComponent = ({ showBot, setShowBot }) => {
+  const [messages, setMessages] = useState([
+    {
+      type: "ai",
+      text: "Hi! I can answer questions about my portfolio. Ask me anything!",
+    },
+  ]);
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [showIntroSpotlight, setShowIntroSpotlight] = useState(false);
+  const [visibleSuggestions, setVisibleSuggestions] = useState(
+    new Set(suggestedQuestions)
+  );
+  const [showInitialSuggestions, setShowInitialSuggestions] = useState(true);
+  const messagesEndRef = useRef(null);
+  const sessionIdRef = useRef(getOrCreateSessionId());
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  useEffect(() => {
+    const showTimer = setTimeout(() => setShowIntroSpotlight(true), 750);
+    const hideTimer = setTimeout(() => setShowIntroSpotlight(false), 7600);
+    return () => {
+      clearTimeout(showTimer);
+      clearTimeout(hideTimer);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (showBot) setShowIntroSpotlight(false);
+  }, [showBot]);
+
+  const renderedMessages = useMemo(
+    () =>
+      messages.map((msg) => ({
+        ...msg,
+        html: msg.type === "ai" ? markdownToHtml(msg.text || "") : "",
+      })),
+    [messages]
+  );
+
+  const clearConversationHistory = async () => {
+    try {
+      await fetch(CLEAR_HISTORY_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionIdRef.current }),
+      });
+    } catch (error) {
+      console.error("Error clearing conversation history:", error);
+    }
+  };
+
+  const handleClearChat = async () => {
+    await clearConversationHistory();
+    setMessages([
+      {
+        type: "ai",
+        text: "Hi! I can answer questions about my portfolio. Ask me anything!",
+      },
+    ]);
+    setVisibleSuggestions(new Set(suggestedQuestions));
+    setShowInitialSuggestions(true);
+  };
+
+  const handleSend = async (query = input) => {
+    const userQuestion = query.trim();
+    if (!userQuestion || isLoading) return;
+
+    if (messages.length === 1 && messages[0].type === "ai" && !messages[0].isTyping) {
+      setShowInitialSuggestions(false);
+    }
+
+    if (query === input) setInput("");
+    setMessages((prev) => [...prev, { type: "user", text: userQuestion }]);
+    setIsLoading(true);
+    setMessages((prev) => [...prev, { type: "ai", text: "", isTyping: true }]);
+
+    try {
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: userQuestion,
+          session_id: sessionIdRef.current,
+        }),
+      });
+
+      if (!response.ok) {
+        let errorDetails = `Request failed (${response.status})`;
+        try {
+          const errorJson = await response.json();
+          if (errorJson?.error) {
+            errorDetails = `Request failed (${response.status}): ${errorJson.error}`;
+          } else if (errorJson?.answer) {
+            errorDetails = `Request failed (${response.status}): ${errorJson.answer}`;
+          }
+        } catch {
+          try {
+            const errorText = await response.text();
+            if (errorText) {
+              errorDetails = `Request failed (${response.status}): ${errorText.substring(
+                0,
+                300
+              )}...`;
+            }
+          } catch {
+            errorDetails = `Request failed (${response.status})`;
+          }
+        }
+
+        setMessages((prev) => {
+          const idx = prev.findIndex((msg) => msg.type === "ai" && msg.isTyping);
+          if (idx === -1) return prev;
+          const next = [...prev];
+          next[idx] = { ...next[idx], text: `Error: ${errorDetails}`, isTyping: false };
+          return next;
+        });
+        return;
+      }
+
+      if (!response.body) {
+        setMessages((prev) => {
+          const idx = prev.findIndex((msg) => msg.type === "ai" && msg.isTyping);
+          if (idx === -1) return prev;
+          const next = [...prev];
+          next[idx] = {
+            ...next[idx],
+            text: "Error: Response body is empty.",
+            isTyping: false,
+          };
+          return next;
+        });
+        return;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let receivedText = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        receivedText += decoder.decode(value, { stream: true });
+        setMessages((prev) => {
+          const idx = prev.findIndex((msg) => msg.type === "ai" && msg.isTyping);
+          if (idx === -1) return [...prev, { type: "ai", text: receivedText, isTyping: true }];
+          const next = [...prev];
+          next[idx] = { ...next[idx], text: receivedText };
+          return next;
+        });
+      }
+
+      setMessages((prev) => {
+        const idx = prev.findIndex((msg) => msg.type === "ai" && msg.isTyping);
+        if (idx === -1) return prev;
+        const next = [...prev];
+        next[idx] = {
+          ...next[idx],
+          isTyping: false,
+          text: next[idx].text || "AI response finished with no text.",
+        };
+        return next;
+      });
+    } catch (error) {
+      setMessages((prev) => {
+        const idx = prev.findIndex((msg) => msg.type === "ai" && msg.isTyping);
+        const msgText =
+          error?.message || "An unexpected error occurred while fetching response.";
+        if (idx === -1) return [...prev, { type: "ai", text: `Error: ${msgText}` }];
+        const next = [...prev];
+        next[idx] = {
+          ...next[idx],
+          isTyping: false,
+          text: next[idx].text ? `${next[idx].text}\n\nError: ${msgText}` : `Error: ${msgText}`,
+        };
+        return next;
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSuggestedQuestionClick = (question) => {
+    setVisibleSuggestions((prev) => {
+      const next = new Set(prev);
+      next.delete(question);
+      return next;
+    });
+    handleSend(question);
+  };
+
+  return (
+    <>
+      <AnimatePresence>
+        {showIntroSpotlight && !showBot && (
+          <motion.div
+            className="fixed inset-0 z-40"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.35 }}
+            onClick={() => setShowIntroSpotlight(false)}
+            aria-hidden="true"
+          >
+            <div
+              className="absolute inset-0"
+              style={{
+                background:
+                  "radial-gradient(circle at calc(100% - 94px) calc(100% - 58px), rgba(15,23,42,0.05) 0, rgba(15,23,42,0.05) 66px, rgba(2,6,23,0.74) 98px)",
+              }}
+            />
+            <motion.div
+              className="absolute bottom-[46px] right-[34px] h-[58px] w-[180px] rounded-full border border-cyan-300/55"
+              animate={{ scale: [1, 1.08, 1], opacity: [0.8, 0.25, 0.8] }}
+              transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+            />
+            <motion.div
+              className="absolute bottom-[120px] right-[30px] rounded-xl border border-cyan-400/40 bg-slate-950/85 px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-cyan-200 shadow-lg backdrop-blur"
+              initial={{ y: 10, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.35, delay: 0.1 }}
+            >
+              Open AI Assistant
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="fixed bottom-5 right-5 z-50">
+        <motion.button
+          onClick={() => setShowBot((prev) => !prev)}
+          className={`group flex items-center gap-2 rounded-full border border-white/15 bg-slate-900/85 text-white shadow-[0_18px_50px_-20px_rgba(14,165,233,0.75)] backdrop-blur-xl transition-colors ${
+            showBot
+              ? "h-12 w-12 justify-center bg-slate-800/95"
+              : "h-12 px-4 pr-5 hover:bg-slate-800/95"
+          }`}
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.97 }}
+          animate={
+            showBot
+              ? { y: 0, boxShadow: "0 18px 50px -20px rgba(14,165,233,0.75)" }
+              : {
+                  y: [0, -2, 0],
+                  boxShadow: [
+                    "0 18px 50px -20px rgba(14,165,233,0.35)",
+                    "0 18px 50px -20px rgba(14,165,233,0.75)",
+                    "0 18px 50px -20px rgba(14,165,233,0.35)",
+                  ],
+                }
+          }
+          transition={
+            showBot ? { duration: 0.15 } : { duration: 2.3, repeat: Infinity, ease: "easeInOut" }
+          }
+          aria-label={showBot ? "Close chatbot" : "Open chatbot"}
+        >
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-cyan-500/20 text-cyan-300">
+            {showBot ? <FaTimes size={13} /> : <FaComment size={13} />}
+          </span>
+          {!showBot && (
+            <span className="text-sm font-medium tracking-wide text-slate-100">
+              Ask AI
+            </span>
+          )}
+        </motion.button>
+
+        <AnimatePresence>
+          {showBot && (
+            <motion.div
+              className="absolute bottom-16 right-0 mt-2 flex h-[min(76vh,680px)] w-[min(440px,calc(100vw-1.25rem))] flex-col overflow-hidden rounded-3xl border border-white/12 bg-slate-950/82 shadow-[0_35px_70px_-30px_rgba(0,0,0,0.95)] backdrop-blur-2xl"
+              initial={{ opacity: 0, y: 34, scale: 0.92, filter: "blur(8px)" }}
+              animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+              exit={{ opacity: 0, y: 24, scale: 0.96, filter: "blur(6px)" }}
+              transition={{ type: "spring", stiffness: 320, damping: 28, mass: 0.95 }}
+            >
+              <div className="flex items-center justify-between border-b border-white/10 bg-gradient-to-r from-slate-900/95 via-slate-900/75 to-cyan-900/25 px-5 py-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-cyan-400/20 text-cyan-300 ring-1 ring-cyan-300/35">
+                    <FaComment size={14} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-100">Nihal Assistant</p>
+                    <p className="text-[11px] text-slate-400">Portfolio AI</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleClearChat}
+                    className="rounded-full p-2 text-slate-400 transition-colors hover:bg-white/10 hover:text-slate-100"
+                    aria-label="Clear conversation history"
+                    title="Clear conversation"
+                  >
+                    <FaTrash size={13} />
+                  </button>
+                  <button
+                    onClick={() => setShowBot(false)}
+                    className="rounded-full p-2 text-slate-400 transition-colors hover:bg-white/10 hover:text-slate-100"
+                    aria-label="Close chatbot"
+                  >
+                    <FaTimes size={14} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-4 py-4 text-sm custom-scrollbar">
+                <div className="space-y-3">
+                  {renderedMessages.map((msg, index) => (
+                    <motion.div
+                      key={index}
+                      className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"}`}
+                      initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                      animate={{
+                        opacity: 1,
+                        y: 0,
+                        scale: 1,
+                        transition: { duration: 0.16, ease: "easeOut" },
+                      }}
+                    >
+                      <div
+                        className={`max-w-[88%] rounded-2xl px-4 py-3 ${
+                          msg.type === "user"
+                            ? "rounded-br-md bg-cyan-500 text-slate-950 shadow-[0_10px_25px_-18px_rgba(34,211,238,0.9)]"
+                            : "rounded-bl-md border border-white/10 bg-slate-900/85 text-slate-100"
+                        }`}
+                      >
+                        {msg.type === "user" ? (
+                          <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+                        ) : (
+                          <div
+                            className="leading-relaxed [&_a]:text-cyan-300 [&_a]:underline [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-cyan-400/60 [&_blockquote]:pl-3 [&_code]:rounded [&_code]:bg-slate-800 [&_code]:px-1.5 [&_code]:py-0.5 [&_h1]:mb-2 [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:mb-2 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:mb-2 [&_h3]:font-semibold [&_li]:ml-4 [&_li]:list-disc [&_ol_li]:list-decimal [&_p]:mb-2 [&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-white/10 [&_pre]:bg-slate-950/95 [&_pre]:p-3"
+                            dangerouslySetInnerHTML={{ __html: msg.html }}
+                          />
+                        )}
+                        {msg.type === "ai" && msg.isTyping && (
+                          <div className="mt-1 flex items-center">
+                            {msg.text ? (
+                              <span className="inline-block h-4 w-[2px] animate-pulse bg-cyan-300/80" />
+                            ) : (
+                              <TypingDots />
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  ))}
+                  <div ref={messagesEndRef} />
+                </div>
+              </div>
+
+              {showInitialSuggestions && visibleSuggestions.size > 0 && (
+                <div className="border-t border-white/10 bg-slate-900/70 px-4 py-3">
+                  <div className="mb-2 text-[11px] uppercase tracking-[0.16em] text-slate-400">
+                    Suggested prompts
+                  </div>
+                  <div className="flex gap-2 overflow-x-auto pb-1 custom-scrollbar">
+                    {[...visibleSuggestions].map((question, index) => (
+                      <button
+                        key={index}
+                        onClick={() => handleSuggestedQuestionClick(question)}
+                        disabled={isLoading}
+                        className="shrink-0 rounded-full border border-cyan-300/35 bg-cyan-300/5 px-3 py-1.5 text-xs text-cyan-200 transition hover:bg-cyan-300/15 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {question}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="border-t border-white/10 bg-slate-950/85 p-3">
+                <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-slate-900/95 px-3 py-2">
+                  <input
+                    type="text"
+                    value={input}
+                    onChange={(event) => setInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && !isLoading) {
+                        event.preventDefault();
+                        handleSend();
+                      }
+                    }}
+                    placeholder="Ask anything about Nihal..."
+                    disabled={isLoading}
+                    className="h-9 flex-1 bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none disabled:opacity-60"
+                  />
+                  <button
+                    onClick={() => handleSend()}
+                    disabled={isLoading || input.trim() === ""}
+                    className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-400 text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+                    aria-label="Send message"
+                  >
+                    <motion.div
+                      animate={isLoading ? { rotate: 360 } : { rotate: 0 }}
+                      transition={
+                        isLoading
+                          ? { duration: 0.95, repeat: Infinity, ease: "linear" }
+                          : { duration: 0.15 }
+                      }
+                    >
+                      <FaPaperPlane size={13} />
+                    </motion.div>
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </>
+  );
 };
 
 export default ChatbotComponent;
