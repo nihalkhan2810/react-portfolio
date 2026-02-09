@@ -1,10 +1,26 @@
 // ChatbotComponent.jsx
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaComment, FaTimes, FaExclamationTriangle, FaPaperPlane } from 'react-icons/fa';
+import { FaComment, FaTimes, FaPaperPlane, FaTrash } from 'react-icons/fa';
 
 // --- Configuration ---
 const API_URL = 'https://rol2810-my-portfolio-ai.hf.space/ask'; // <-- *** UPDATE THIS URL ***
+const CLEAR_HISTORY_URL = API_URL.replace(/\/ask\/?$/, '/clear_history');
+const SESSION_STORAGE_KEY = 'chat_session_id';
+
+const getOrCreateSessionId = () => {
+    try {
+        const existingSessionId = localStorage.getItem(SESSION_STORAGE_KEY);
+        if (existingSessionId) return existingSessionId;
+
+        const generatedSessionId =
+            'session_' + Date.now() + '_' + Math.random().toString(36).slice(2, 11);
+        localStorage.setItem(SESSION_STORAGE_KEY, generatedSessionId);
+        return generatedSessionId;
+    } catch (error) {
+        return 'session_' + Date.now();
+    }
+};
 
 // --- List of Suggested Questions ---
 // These questions will be shown initially as suggestions
@@ -37,6 +53,7 @@ const ChatbotComponent = ({ showBot, setShowBot }) => {
     const [visibleSuggestions, setVisibleSuggestions] = useState(new Set(suggestedQuestions)); // Set of questions still visible
     // State to control the visibility of the entire suggestion *bar* initially
     const [showInitialSuggestions, setShowInitialSuggestions] = useState(true); // True initially
+    const sessionIdRef = useRef(getOrCreateSessionId());
 
     // --- State for per-message typing indicator ---
     // This is handled by the isTyping flag on the message object
@@ -47,6 +64,28 @@ const ChatbotComponent = ({ showBot, setShowBot }) => {
         // setMessages([{ type: 'ai', text: 'Hi! I can answer questions about my portfolio. Ask me anything!' }]);
         // setVisibleSuggestions(new Set(suggestedQuestions)); // Reset suggestions when closing
         // setShowInitialSuggestions(true); // Reset suggestion bar visibility when closing
+    };
+
+    const clearConversationHistory = async () => {
+        try {
+            await fetch(CLEAR_HISTORY_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ session_id: sessionIdRef.current }),
+            });
+        } catch (error) {
+            console.error('Error clearing conversation history:', error);
+        }
+    };
+
+    const handleClearChat = async () => {
+        await clearConversationHistory();
+        setMessages([{
+            type: 'ai',
+            text: 'Hi! I can answer questions about my portfolio. Ask me anything!'
+        }]);
+        setVisibleSuggestions(new Set(suggestedQuestions));
+        setShowInitialSuggestions(true);
     };
 
     // Effect to auto-scroll to the latest message whenever messages change
@@ -88,7 +127,10 @@ const ChatbotComponent = ({ showBot, setShowBot }) => {
             const response = await fetch(API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ query: userQuestion }),
+                body: JSON.stringify({
+                    query: userQuestion,
+                    session_id: sessionIdRef.current
+                }),
             });
 
             if (!response.ok) {
@@ -111,9 +153,9 @@ const ChatbotComponent = ({ showBot, setShowBot }) => {
                      const typingMessageIndex = prev.findIndex(msg => msg.type === 'ai' && msg.isTyping);
                      if (typingMessageIndex === -1) return prev;
 
-                     const messageToUpdate = { ...prev[typingMessageIndex] };
-                     messageToupdate.text = `Error: ${errorDetails}`;
-                     messageToUpdate.isTyping = false;
+                      const messageToUpdate = { ...prev[typingMessageIndex] };
+                      messageToUpdate.text = `Error: ${errorDetails}`;
+                      messageToUpdate.isTyping = false;
 
                      const newMessages = [...prev];
                      newMessages[typingMessageIndex] = messageToUpdate;
@@ -313,6 +355,14 @@ const ChatbotComponent = ({ showBot, setShowBot }) => {
                             <FaComment className="mr-2 text-cyan-400" size={20} />
                             <span className="font-medium">Ask Nihal</span>
                         </div>
+                         <button
+                            onClick={handleClearChat}
+                            className="mr-2 text-gray-400 hover:text-white focus:outline-none"
+                            aria-label="Clear conversation history"
+                            title="Clear conversation"
+                        >
+                            <FaTrash />
+                        </button>
                         <button
                             onClick={toggleBot}
                             className="text-gray-400 hover:text-white focus:outline-none"
