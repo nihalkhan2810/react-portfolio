@@ -355,32 +355,32 @@ const ChatbotComponent = ({ showBot, setShowBot }) => {
   };
 
   return (
-    <>
+    <div className="fixed bottom-5 right-5 z-50">
       <AnimatePresence>
         {showIntroSpotlight && !showBot && (
           <motion.div
-            className="fixed inset-0 z-40"
+            className="absolute inset-0 z-[-1] pointer-events-none"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.35 }}
-            onClick={() => setShowIntroSpotlight(false)}
             aria-hidden="true"
           >
+            {/* The "Hole" with massive box-shadow to darken background */}
             <div
-              className="absolute inset-0"
-              style={{
-                background:
-                  "radial-gradient(circle at calc(100% - 94px) calc(100% - 58px), rgba(15,23,42,0.05) 0, rgba(15,23,42,0.05) 66px, rgba(2,6,23,0.74) 98px)",
-              }}
+              className="absolute inset-0 rounded-full shadow-[0_0_0_9999px_rgba(2,6,23,0.74)]"
             />
+
+            {/* Pulsing Border - perfectly aligned because it matches parent's dimensions */}
             <motion.div
-              className="absolute bottom-[46px] right-[34px] h-[58px] w-[180px] rounded-full border border-cyan-300/55"
-              animate={{ scale: [1, 1.08, 1], opacity: [0.8, 0.25, 0.8] }}
+              className="absolute inset-[-4px] rounded-full border border-cyan-300/55"
+              animate={{ scale: [1, 1.05, 1], opacity: [0.8, 0.2, 0.8] }}
               transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
             />
+
+            {/* Tooltip - positioned relative to the button container */}
             <motion.div
-              className="absolute bottom-[120px] right-[30px] rounded-xl border border-cyan-400/40 bg-slate-950/85 px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-cyan-200 shadow-lg backdrop-blur"
+              className="absolute bottom-[calc(100%+12px)] right-0 whitespace-nowrap rounded-xl border border-cyan-400/40 bg-slate-950/85 px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-cyan-200 shadow-lg backdrop-blur"
               initial={{ y: 10, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ duration: 0.35, delay: 0.1 }}
@@ -391,187 +391,183 @@ const ChatbotComponent = ({ showBot, setShowBot }) => {
         )}
       </AnimatePresence>
 
-      <div className="fixed bottom-5 right-5 z-50">
-        <motion.button
-          onClick={() => setShowBot((prev) => !prev)}
-          className={`group flex items-center gap-2 rounded-full border border-white/15 bg-slate-900/85 text-white shadow-[0_18px_50px_-20px_rgba(14,165,233,0.75)] backdrop-blur-xl transition-colors ${
-            showBot
-              ? "h-12 w-12 justify-center bg-slate-800/95"
-              : "h-12 px-4 pr-5 hover:bg-slate-800/95"
+      <motion.button
+        onClick={() => setShowBot((prev) => !prev)}
+        className={`group flex items-center gap-2 rounded-full border border-white/15 bg-slate-900/85 text-white shadow-[0_18px_50px_-20px_rgba(14,165,233,0.75)] backdrop-blur-xl transition-colors ${showBot
+          ? "h-12 w-12 justify-center bg-slate-800/95"
+          : "h-12 px-4 pr-5 hover:bg-slate-800/95"
           }`}
-          whileHover={{ scale: 1.03 }}
-          whileTap={{ scale: 0.97 }}
-          animate={
-            showBot
-              ? { y: 0, boxShadow: "0 18px 50px -20px rgba(14,165,233,0.75)" }
-              : {
-                  y: [0, -2, 0],
-                  boxShadow: [
-                    "0 18px 50px -20px rgba(14,165,233,0.35)",
-                    "0 18px 50px -20px rgba(14,165,233,0.75)",
-                    "0 18px 50px -20px rgba(14,165,233,0.35)",
-                  ],
-                }
-          }
-          transition={
-            showBot ? { duration: 0.15 } : { duration: 2.3, repeat: Infinity, ease: "easeInOut" }
-          }
-          aria-label={showBot ? "Close chatbot" : "Open chatbot"}
-        >
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-cyan-500/20 text-cyan-300">
-            {showBot ? <FaTimes size={13} /> : <FaComment size={13} />}
+        whileHover={{ scale: 1.03 }}
+        whileTap={{ scale: 0.97 }}
+        animate={
+          showBot
+            ? { y: 0, boxShadow: "0 18px 50px -20px rgba(14,165,233,0.75)" }
+            : {
+              y: [0, -2, 0],
+              boxShadow: [
+                "0 18px 50px -20px rgba(14,165,233,0.35)",
+                "0 18px 50px -20px rgba(14,165,233,0.75)",
+                "0 18px 50px -20px rgba(14,165,233,0.35)",
+              ],
+            }
+        }
+        transition={
+          showBot ? { duration: 0.15 } : { duration: 2.3, repeat: Infinity, ease: "easeInOut" }
+        }
+        aria-label={showBot ? "Close chatbot" : "Open chatbot"}
+      >
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-cyan-500/20 text-cyan-300">
+          {showBot ? <FaTimes size={13} /> : <FaComment size={13} />}
+        </span>
+        {!showBot && (
+          <span className="text-sm font-medium tracking-wide text-slate-100">
+            Ask AI
           </span>
-          {!showBot && (
-            <span className="text-sm font-medium tracking-wide text-slate-100">
-              Ask AI
-            </span>
-          )}
-        </motion.button>
+        )}
+      </motion.button>
 
-        <AnimatePresence>
-          {showBot && (
-            <motion.div
-              className="absolute bottom-16 right-0 mt-2 flex h-[min(76vh,680px)] w-[min(440px,calc(100vw-1.25rem))] flex-col overflow-hidden rounded-3xl border border-white/12 bg-slate-950/82 shadow-[0_35px_70px_-30px_rgba(0,0,0,0.95)] backdrop-blur-2xl"
-              initial={{ opacity: 0, y: 34, scale: 0.92, filter: "blur(8px)" }}
-              animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
-              exit={{ opacity: 0, y: 24, scale: 0.96, filter: "blur(6px)" }}
-              transition={{ type: "spring", stiffness: 320, damping: 28, mass: 0.95 }}
-            >
-              <div className="flex items-center justify-between border-b border-white/10 bg-gradient-to-r from-slate-900/95 via-slate-900/75 to-cyan-900/25 px-5 py-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-cyan-400/20 text-cyan-300 ring-1 ring-cyan-300/35">
-                    <FaComment size={14} />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-100">Nihal Assistant</p>
-                    <p className="text-[11px] text-slate-400">Portfolio AI</p>
-                  </div>
+      <AnimatePresence>
+        {showBot && (
+          <motion.div
+            className="absolute bottom-16 right-0 mt-2 flex h-[min(76vh,680px)] w-[min(440px,calc(100vw-1.25rem))] flex-col overflow-hidden rounded-3xl border border-white/12 bg-slate-950/82 shadow-[0_35px_70px_-30px_rgba(0,0,0,0.95)] backdrop-blur-2xl"
+            initial={{ opacity: 0, y: 34, scale: 0.92, filter: "blur(8px)" }}
+            animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+            exit={{ opacity: 0, y: 24, scale: 0.96, filter: "blur(6px)" }}
+            transition={{ type: "spring", stiffness: 320, damping: 28, mass: 0.95 }}
+          >
+            <div className="flex items-center justify-between border-b border-white/10 bg-gradient-to-r from-slate-900/95 via-slate-900/75 to-cyan-900/25 px-5 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-cyan-400/20 text-cyan-300 ring-1 ring-cyan-300/35">
+                  <FaComment size={14} />
                 </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleClearChat}
-                    className="rounded-full p-2 text-slate-400 transition-colors hover:bg-white/10 hover:text-slate-100"
-                    aria-label="Clear conversation history"
-                    title="Clear conversation"
-                  >
-                    <FaTrash size={13} />
-                  </button>
-                  <button
-                    onClick={() => setShowBot(false)}
-                    className="rounded-full p-2 text-slate-400 transition-colors hover:bg-white/10 hover:text-slate-100"
-                    aria-label="Close chatbot"
-                  >
-                    <FaTimes size={14} />
-                  </button>
+                <div>
+                  <p className="text-sm font-semibold text-slate-100">Nihal Assistant</p>
+                  <p className="text-[11px] text-slate-400">Portfolio AI</p>
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto px-4 py-4 text-sm custom-scrollbar">
-                <div className="space-y-3">
-                  {renderedMessages.map((msg, index) => (
-                    <motion.div
-                      key={index}
-                      className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"}`}
-                      initial={{ opacity: 0, y: 10, scale: 0.98 }}
-                      animate={{
-                        opacity: 1,
-                        y: 0,
-                        scale: 1,
-                        transition: { duration: 0.16, ease: "easeOut" },
-                      }}
-                    >
-                      <div
-                        className={`max-w-[88%] rounded-2xl px-4 py-3 ${
-                          msg.type === "user"
-                            ? "rounded-br-md bg-cyan-500 text-slate-950 shadow-[0_10px_25px_-18px_rgba(34,211,238,0.9)]"
-                            : "rounded-bl-md border border-white/10 bg-slate-900/85 text-slate-100"
-                        }`}
-                      >
-                        {msg.type === "user" ? (
-                          <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
-                        ) : (
-                          <div
-                            className="leading-relaxed [&_a]:text-cyan-300 [&_a]:underline [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-cyan-400/60 [&_blockquote]:pl-3 [&_code]:rounded [&_code]:bg-slate-800 [&_code]:px-1.5 [&_code]:py-0.5 [&_h1]:mb-2 [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:mb-2 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:mb-2 [&_h3]:font-semibold [&_li]:ml-4 [&_li]:list-disc [&_ol_li]:list-decimal [&_p]:mb-2 [&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-white/10 [&_pre]:bg-slate-950/95 [&_pre]:p-3"
-                            dangerouslySetInnerHTML={{ __html: msg.html }}
-                          />
-                        )}
-                        {msg.type === "ai" && msg.isTyping && (
-                          <div className="mt-1 flex items-center">
-                            {msg.text ? (
-                              <span className="inline-block h-4 w-[2px] animate-pulse bg-cyan-300/80" />
-                            ) : (
-                              <TypingDots />
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </motion.div>
-                  ))}
-                  <div ref={messagesEndRef} />
-                </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleClearChat}
+                  className="rounded-full p-2 text-slate-400 transition-colors hover:bg-white/10 hover:text-slate-100"
+                  aria-label="Clear conversation history"
+                  title="Clear conversation"
+                >
+                  <FaTrash size={13} />
+                </button>
+                <button
+                  onClick={() => setShowBot(false)}
+                  className="rounded-full p-2 text-slate-400 transition-colors hover:bg-white/10 hover:text-slate-100"
+                  aria-label="Close chatbot"
+                >
+                  <FaTimes size={14} />
+                </button>
               </div>
+            </div>
 
-              {showInitialSuggestions && visibleSuggestions.size > 0 && (
-                <div className="border-t border-white/10 bg-slate-900/70 px-4 py-3">
-                  <div className="mb-2 text-[11px] uppercase tracking-[0.16em] text-slate-400">
-                    Suggested prompts
-                  </div>
-                  <div className="flex gap-2 overflow-x-auto pb-1 custom-scrollbar">
-                    {[...visibleSuggestions].map((question, index) => (
-                      <button
-                        key={index}
-                        onClick={() => handleSuggestedQuestionClick(question)}
-                        disabled={isLoading}
-                        className="shrink-0 rounded-full border border-cyan-300/35 bg-cyan-300/5 px-3 py-1.5 text-xs text-cyan-200 transition hover:bg-cyan-300/15 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {question}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="border-t border-white/10 bg-slate-950/85 p-3">
-                <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-slate-900/95 px-3 py-2">
-                  <input
-                    type="text"
-                    value={input}
-                    onChange={(event) => setInput(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" && !isLoading) {
-                        event.preventDefault();
-                        handleSend();
-                      }
+            <div className="flex-1 overflow-y-auto px-4 py-4 text-sm custom-scrollbar">
+              <div className="space-y-3">
+                {renderedMessages.map((msg, index) => (
+                  <motion.div
+                    key={index}
+                    className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"}`}
+                    initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                    animate={{
+                      opacity: 1,
+                      y: 0,
+                      scale: 1,
+                      transition: { duration: 0.16, ease: "easeOut" },
                     }}
-                    placeholder="Ask anything about Nihal..."
-                    disabled={isLoading}
-                    className="h-9 flex-1 bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none disabled:opacity-60"
-                  />
-                  <button
-                    onClick={() => handleSend()}
-                    disabled={isLoading || input.trim() === ""}
-                    className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-400 text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
-                    aria-label="Send message"
                   >
-                    <motion.div
-                      animate={isLoading ? { rotate: 360 } : { rotate: 0 }}
-                      transition={
-                        isLoading
-                          ? { duration: 0.95, repeat: Infinity, ease: "linear" }
-                          : { duration: 0.15 }
-                      }
+                    <div
+                      className={`max-w-[88%] rounded-2xl px-4 py-3 ${msg.type === "user"
+                        ? "rounded-br-md bg-cyan-500 text-slate-950 shadow-[0_10px_25px_-18px_rgba(34,211,238,0.9)]"
+                        : "rounded-bl-md border border-white/10 bg-slate-900/85 text-slate-100"
+                        }`}
                     >
-                      <FaPaperPlane size={13} />
-                    </motion.div>
-                  </button>
+                      {msg.type === "user" ? (
+                        <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+                      ) : (
+                        <div
+                          className="leading-relaxed [&_a]:text-cyan-300 [&_a]:underline [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-cyan-400/60 [&_blockquote]:pl-3 [&_code]:rounded [&_code]:bg-slate-800 [&_code]:px-1.5 [&_code]:py-0.5 [&_h1]:mb-2 [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:mb-2 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:mb-2 [&_h3]:font-semibold [&_li]:ml-4 [&_li]:list-disc [&_ol_li]:list-decimal [&_p]:mb-2 [&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-white/10 [&_pre]:bg-slate-950/95 [&_pre]:p-3"
+                          dangerouslySetInnerHTML={{ __html: msg.html }}
+                        />
+                      )}
+                      {msg.type === "ai" && msg.isTyping && (
+                        <div className="mt-1 flex items-center">
+                          {msg.text ? (
+                            <span className="inline-block h-4 w-[2px] animate-pulse bg-cyan-300/80" />
+                          ) : (
+                            <TypingDots />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                ))}
+                <div ref={messagesEndRef} />
+              </div>
+            </div>
+
+            {showInitialSuggestions && visibleSuggestions.size > 0 && (
+              <div className="border-t border-white/10 bg-slate-900/70 px-4 py-3">
+                <div className="mb-2 text-[11px] uppercase tracking-[0.16em] text-slate-400">
+                  Suggested prompts
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-1 custom-scrollbar">
+                  {[...visibleSuggestions].map((question, index) => (
+                    <button
+                      key={index}
+                      onClick={() => handleSuggestedQuestionClick(question)}
+                      disabled={isLoading}
+                      className="shrink-0 rounded-full border border-cyan-300/35 bg-cyan-300/5 px-3 py-1.5 text-xs text-cyan-200 transition hover:bg-cyan-300/15 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {question}
+                    </button>
+                  ))}
                 </div>
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-    </>
+            )}
+
+            <div className="border-t border-white/10 bg-slate-950/85 p-3">
+              <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-slate-900/95 px-3 py-2">
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(event) => setInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !isLoading) {
+                      event.preventDefault();
+                      handleSend();
+                    }
+                  }}
+                  placeholder="Ask anything about Nihal..."
+                  disabled={isLoading}
+                  className="h-9 flex-1 bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none disabled:opacity-60"
+                />
+                <button
+                  onClick={() => handleSend()}
+                  disabled={isLoading || input.trim() === ""}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-400 text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+                  aria-label="Send message"
+                >
+                  <motion.div
+                    animate={isLoading ? { rotate: 360 } : { rotate: 0 }}
+                    transition={
+                      isLoading
+                        ? { duration: 0.95, repeat: Infinity, ease: "linear" }
+                        : { duration: 0.15 }
+                    }
+                  >
+                    <FaPaperPlane size={13} />
+                  </motion.div>
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 };
 
